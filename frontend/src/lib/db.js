@@ -1,11 +1,14 @@
 import mongoose from 'mongoose';
 
-// MongoDB Atlas లింక్ లేదా లోకల్ డెవలప్‌మెంట్ కోసం URI
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/avento_db';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+}
 
 let cached = global.mongoose || { conn: null, promise: null };
 
-export async function connectToDatabase() {
+export async function connectDB() {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {

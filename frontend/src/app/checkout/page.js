@@ -1,396 +1,456 @@
 'use client';
+
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useCart } from '../../context/CartContext';
 import Link from 'next/link';
 
+// ----------------------------------------------------
+// ⚙️ మీ వివరాలు ఇక్కడ అప్‌డేట్ చేయబడ్డాయి:
+// ----------------------------------------------------
+const STORE_UPI_ID = "8978314516@ybl"; // 👈 మీ PhonePe UPI ID
+const STORE_NAME = "SPY ZONE";
+const OWNER_WHATSAPP_NUMBER = "917890644323"; // 👈 మీ వాట్సాప్ నంబర్
+const QR_IMAGE_PATH = "/qr-code.png"; // 👈 public/qr-code.png లో ఉన్న మీ Scanner ఫోటో
+// ----------------------------------------------------
+
+// పిన్‌కోడ్ (516101 Base) ఆధారంగా డైనామిక్ షిప్పింగ్ ఛార్జీలు
+const calculateShippingFee = (pincode) => {
+  const cleanPin = pincode ? pincode.trim() : '';
+
+  if (cleanPin.length < 6) {
+    return { fee: 40, zone: 'Local / Standard Zone' };
+  }
+
+  // 1. రైల్వే కోడూరు & పరిసర ప్రాంతాలు (5161XX)
+  if (cleanPin.startsWith('5161')) {
+    return { fee: 40, zone: 'Local Koduru Zone (Railway Koduru Area)' };
+  }
+
+  // 2. ఆంధ్రప్రదేశ్ & తెలంగాణ (50, 51, 52, 53)
+  const prefix2 = cleanPin.substring(0, 2);
+  if (['51', '52', '53', '50'].includes(prefix2)) {
+    return { fee: 70, zone: 'Andhra Pradesh & Telangana Zone' };
+  }
+
+  // 3. సౌత్ ఇండియా (కార్ణాటక, తమిళనాడు, కేరళ)
+  const pinNum = parseInt(cleanPin, 10);
+  if (
+    (pinNum >= 560000 && pinNum <= 599999) ||
+    (pinNum >= 600000 && pinNum <= 649999) ||
+    (pinNum >= 670000 && pinNum <= 699999)
+  ) {
+    return { fee: 90, zone: 'South India Regional Zone' };
+  }
+
+  // 4. మిగతా భారతదేశం (Rest of India)
+  return { fee: 120, zone: 'National Zone (Rest of India)' };
+};
+
 export default function CheckoutPage() {
   const { cart } = useCart();
-  const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const [formData, setFormData] = useState({
     fullName: '',
-    email: '',
     phone: '',
+    email: '',
     address: '',
+    pincode: '',
     city: '',
     state: '',
-    pincode: '',
   });
 
-  const [errors, setErrors] = useState({});
-  const [pincodeLoading, setPincodeLoading] = useState(false);
-  const [shippingCharge, setShippingCharge] = useState(0); 
-  const [shippingMessage, setShippingMessage] = useState('');
+  const [shippingInfo, setShippingInfo] = useState({ fee: 40, zone: 'Local / Standard Zone' });
+  const [orderConfirmed, setOrderConfirmed] = useState(false);
+  const [lastOrderDetails, setLastOrderDetails] = useState(null);
+  const [showDesktopQR, setShowDesktopQR] = useState(false);
 
-  // UPI Configuration
-  const MY_UPI_ID = '9550665977-2@yb';
-  const PAYEE_NAME = 'SPYZONE';
-  const MY_WHATSAPP_NUMBER = '919550665977'; // మీ WhatsApp నంబర్
+  useEffect(() => {
+    const info = calculateShippingFee(formData.pincode);
+    setShippingInfo(info);
+  }, [formData.pincode]);
 
-  const handlePhoneChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '');
-    if (val.length <= 10) {
-      setFormData({ ...formData, phone: val });
-      if (errors.phone) setErrors({ ...errors, phone: '' });
-    }
-  };
+  const subtotal = cart.reduce((total, item) => {
+    const priceNum = parseInt(
+      item.price ? item.price.toString().replace(/[^0-9]/g, '') : '0',
+      10
+    );
+    return total + priceNum;
+  }, 0);
 
-  const handlePincodeChange = async (e) => {
-    const val = e.target.value.replace(/\D/g, '');
-    if (val.length <= 6) {
-      setFormData((prev) => ({ ...prev, pincode: val }));
-      if (errors.pincode) setErrors({ ...errors, pincode: '' });
-
-      if (val.length === 6) {
-        fetchPincodeDetails(val);
-      } else {
-        setShippingCharge(0);
-        setShippingMessage('');
-      }
-    }
-  };
-
-  const fetchPincodeDetails = async (pin) => {
-    setPincodeLoading(true);
-    setShippingMessage('లొకేషన్ తనిఖీ చేస్తోంది...');
-    try {
-      const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-      const data = await res.json();
-
-      if (data && data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
-        const postOffice = data[0].PostOffice[0];
-        const detectedCity = postOffice.District || postOffice.Block;
-        const detectedState = postOffice.State;
-
-        setFormData((prev) => ({
-          ...prev,
-          city: detectedCity,
-          state: detectedState,
-        }));
-
-        let charge = 60;
-        let msg = '';
-
-        if (pin.startsWith('516') || detectedCity.toLowerCase().includes('kadapa')) {
-          charge = 40;
-          msg = `Local Shipping (${detectedCity})`;
-        } else if (['Andhra Pradesh', 'Telangana'].includes(detectedState)) {
-          charge = 60;
-          msg = `State Shipping (${detectedState})`;
-        } else {
-          charge = 100;
-          msg = `National Shipping (${detectedState})`;
-        }
-
-        setShippingCharge(charge);
-        setShippingMessage(msg);
-      } else {
-        setErrors((prev) => ({ ...prev, pincode: 'దయచేసి సరియైన పిన్ కోడ్ ఎంటర్ చేయండి' }));
-        setShippingCharge(0);
-        setShippingMessage('పిన్ కోడ్ లొకేషన్ దొరకలేదు');
-      }
-    } catch (err) {
-      console.error('Pincode fetch error:', err);
-      setShippingMessage('');
-    } finally {
-      setPincodeLoading(false);
-    }
-  };
+  const shippingFee = subtotal > 0 ? shippingInfo.fee : 0;
+  const totalAmount = subtotal + shippingFee;
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-    if (errors[name]) setErrors({ ...errors, [name]: '' });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const validateForm = () => {
-    let errs = {};
-
-    if (!formData.fullName.trim() || formData.fullName.trim().length < 3) {
-      errs.fullName = 'దయచేసి పూర్తి పేరు ఎంటర్ చేయండి';
+  const isMobileDevice = () => {
+    if (typeof window !== 'undefined') {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     }
-
-    if (!formData.phone || formData.phone.length !== 10) {
-      errs.phone = 'ఫోన్ నెంబర్ కచ్చితంగా 10 అంకెలు ఉండాలి!';
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formData.email && !emailRegex.test(formData.email)) {
-      errs.email = 'సరైన ఇమెయిల్ ఎంటర్ చేయండి';
-    }
-
-    if (!formData.address.trim() || formData.address.trim().length < 5) {
-      errs.address = 'దయచేసి పూర్తి అడ్రస్ నింపండి';
-    }
-
-    if (!formData.city.trim()) errs.city = 'సిటీ నింపండి';
-    if (!formData.state.trim()) errs.state = 'స్టేట్ నింపండి';
-    if (!formData.pincode || formData.pincode.length !== 6) {
-      errs.pincode = 'పిన్ కోడ్ 6 అంకెలు ఉండాలి!';
-    }
-
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+    return false;
   };
 
-  const calculateSubtotal = () => {
-    if (!cart || cart.length === 0) return 0;
-    return cart.reduce((total, item) => {
-      const priceNum = parseInt(item.price ? item.price.replace(/[^0-9]/g, '') : '0', 10);
-      return total + priceNum;
-    }, 0);
-  };
-
-  const subtotal = calculateSubtotal();
-  const totalAmount = subtotal + shippingCharge;
-
-  // Dynamic PhonePe / UPI Link Trigger
-  const handlePayWithPhonePe = (e) => {
+  const handlePaymentAndOrder = (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      alert('దయచేసి షిప్పింగ్ వివరాలు సరిగ్గా నింపండి!');
+    if (!formData.fullName || !formData.phone || !formData.address || !formData.pincode) {
+      alert('దయచేసి అన్ని వివరాలను (Name, Phone, Address, Pincode) పూర్తి చేయండి!');
       return;
     }
 
-    if (!cart || cart.length === 0) {
-      alert('మీ కార్ట్ ఖాళీగా ఉంది!');
+    if (cart.length === 0) {
+      alert('మీ బ్యాగ్ ఖాళీగా ఉంది!');
       return;
     }
 
-    const orderId = 'SPY-' + Math.floor(100000 + Math.random() * 900000);
+    // 1. WhatsApp Message (ఓనర్ కోసం)
+    let itemsListText = cart
+      .map(
+        (item, idx) =>
+          `${idx + 1}. ${item.name} (Size: ${item.selectedSize || 'N/A'}) - ${item.price}`
+      )
+      .join('\n');
 
-    // Pending Order Details
-    const pendingOrder = {
-      orderId,
-      items: cart,
-      subtotal,
-      shippingCharge,
-      totalAmount,
-      shippingAddress: formData,
-      date: new Date().toLocaleString(),
-    };
-    localStorage.setItem('pending_spy_order', JSON.stringify(pendingOrder));
+    const whatsappMessage = `🛍️ *NEW ORDER PLACED ON SPY ZONE* 🛍️\n\n` +
+      `👤 *Customer Name:* ${formData.fullName}\n` +
+      `📞 *Phone:* ${formData.phone}\n` +
+      `📧 *Email:* ${formData.email || 'N/A'}\n` +
+      `🏠 *Address:* ${formData.address}, ${formData.city}, ${formData.state} - ${formData.pincode}\n` +
+      `📍 *Shipping Zone:* ${shippingInfo.zone}\n\n` +
+      `📦 *ORDER ITEMS:*\n${itemsListText}\n\n` +
+      `💵 *Subtotal:* ₹${subtotal}\n` +
+      `🚚 *Shipping Fee:* ₹${shippingFee}\n` +
+      `💰 *TOTAL AMOUNT:* ₹${totalAmount}\n\n` +
+      `💳 *Payment Method:* PhonePe / Direct UPI`;
 
-    // Dynamic UPI Intent Link (Generates exact amount on PhonePe)
-    const dynamicUpiUrl = `upi://pay?pa=${encodeURIComponent(MY_UPI_ID)}&pn=${encodeURIComponent(PAYEE_NAME)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent('Order ' + orderId)}`;
+    const encodedMessage = encodeURIComponent(whatsappMessage);
+    const ownerWhatsAppUrl = `https://wa.me/${OWNER_WHATSAPP_NUMBER}?text=${encodedMessage}`;
 
-    // Open PhonePe / UPI App Directly
-    window.location.href = dynamicUpiUrl;
+    // 2. Dynamic UPI Direct Link
+    const upiUrl = `upi://pay?pa=${STORE_UPI_ID}&pn=${encodeURIComponent(STORE_NAME)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent('SPY ZONE Order')}`;
 
-    // Direct WhatsApp Confirmation Trigger
-    const waText = `Hi SPY ZONE, I want to confirm my Order:\n\n📌 *Order ID:* ${orderId}\n💰 *Amount:* ₹${totalAmount}\n👤 *Name:* ${formData.fullName}\n📞 *Phone:* ${formData.phone}\n📍 *Address:* ${formData.address}, ${formData.city}, ${formData.state} - ${formData.pincode}\n\nI am attaching the payment screenshot.`;
-    const waUrl = `https://wa.me/${MY_WHATSAPP_NUMBER}?text=${encodeURIComponent(waText)}`;
+    if (isMobileDevice()) {
+      // 📱 మొబైల్‌లో నేరుగా PhonePe App ఓపెన్ అవుతుంది
+      window.location.href = upiUrl;
 
-    // 3 సెకన్ల తర్వాత WhatsApp Redirect చేయడం
-    setTimeout(() => {
-      window.location.href = waUrl;
-    }, 3000);
+      setTimeout(() => {
+        window.open(ownerWhatsAppUrl, '_blank');
+        setLastOrderDetails({
+          ...formData,
+          totalAmount,
+          shippingZone: shippingInfo.zone,
+        });
+        setOrderConfirmed(true);
+      }, 2000);
+    } else {
+      // 💻 ల్యాప్‌టాప్‌లో మీ public/qr-code.png ఫోటోతో మోడల్ ఓపెన్ అవుతుంది
+      setShowDesktopQR(true);
+      setLastOrderDetails({
+        ...formData,
+        totalAmount,
+        shippingZone: shippingInfo.zone,
+        ownerWhatsAppUrl,
+      });
+    }
   };
 
-  if (!mounted) return null;
+  const handleDesktopPaymentComplete = () => {
+    setShowDesktopQR(false);
+    if (lastOrderDetails?.ownerWhatsAppUrl) {
+      window.open(lastOrderDetails.ownerWhatsAppUrl, '_blank');
+    }
+    setOrderConfirmed(true);
+  };
+
+  if (orderConfirmed) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border border-gray-200 p-8 rounded-lg shadow-lg text-center">
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">
+            ✓
+          </div>
+          <h1 className="text-2xl font-black uppercase tracking-wide text-gray-900 mb-2">
+            Your Order is Confirmed! 🎉
+          </h1>
+          <p className="text-xs text-gray-600 mb-6">
+            ధన్యవాదాలు <b>{lastOrderDetails?.fullName}</b>! మీ ఆర్డర్ వివరాలు మరియు డెలివరీ అడ్రస్ స్వీకరించబడ్డాయి.
+          </p>
+
+          <div className="bg-gray-50 p-4 rounded text-left border text-xs space-y-2 mb-6">
+            <p><b>Total Amount:</b> ₹{lastOrderDetails?.totalAmount}</p>
+            <p><b>Mobile:</b> {lastOrderDetails?.phone}</p>
+            <p><b>Shipping Zone:</b> {lastOrderDetails?.shippingZone}</p>
+            <p><b>Delivery Address:</b> {lastOrderDetails?.address}, {lastOrderDetails?.city} - {lastOrderDetails?.pincode}</p>
+          </div>
+
+          <Link
+            href="/"
+            className="block w-full bg-black text-white py-3 text-xs uppercase font-bold tracking-widest hover:bg-gray-800 transition"
+          >
+            Continue Shopping
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans pb-16">
-      <header className="border-b border-gray-200 bg-white sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-black uppercase tracking-widest">SPY ZONE CHECKOUT</span>
-          </Link>
-          <Link href="/" className="text-xs font-bold uppercase underline">Back to Shop</Link>
-        </div>
+    <div className="min-h-screen bg-white text-black font-sans">
+      <header className="border-b px-4 md:px-10 h-[60px] flex items-center justify-between">
+        <h1 className="text-lg font-black uppercase tracking-wider">
+          SPY ZONE CHECKOUT
+        </h1>
+        <Link href="/" className="text-xs font-bold uppercase underline">
+          Back to Shop
+        </Link>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <form onSubmit={handlePayWithPhonePe} className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          
-          {/* 1. Shipping Details */}
-          <div>
-            <h2 className="text-lg font-bold uppercase tracking-widest mb-6 border-b pb-2">1. Shipping Details</h2>
+      <main className="max-w-[1200px] mx-auto px-4 md:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* LEFT: FORM */}
+        <div className="lg:col-span-7 space-y-6">
+          <form id="checkout-form" onSubmit={handlePaymentAndOrder} className="space-y-4">
             
-            <div className="space-y-4">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1">
+                Full Name *
+              </label>
+              <input
+                type="text"
+                name="fullName"
+                required
+                value={formData.fullName}
+                onChange={handleChange}
+                placeholder="Ex: Vallepu Mahesh"
+                className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase mb-1">Full Name *</label>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1">
+                  Phone Number (10 Digits) *
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  required
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="Ex: 7890644323"
+                  className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Ex: mail@example.com"
+                  className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider mb-1">
+                Street Address *
+              </label>
+              <textarea
+                name="address"
+                required
+                rows={2}
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="House No, Street Name, Area"
+                className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1">
+                  Pincode *
+                </label>
                 <input
                   type="text"
-                  name="fullName"
-                  value={formData.fullName}
+                  name="pincode"
+                  required
+                  maxLength={6}
+                  value={formData.pincode}
                   onChange={handleChange}
-                  placeholder="Enter your full name"
-                  className={`w-full border p-3 text-sm rounded ${errors.fullName ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                  placeholder="516101"
+                  className="w-full border border-purple-500 bg-purple-50/20 p-2.5 text-xs font-bold focus:outline-none"
                 />
-                {errors.fullName && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.fullName}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase mb-1">Phone Number (10 Digits) *</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handlePhoneChange}
-                    placeholder="10-digit mobile no"
-                    className={`w-full border p-3 text-sm rounded ${errors.phone ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  />
-                  {errors.phone && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.phone}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase mb-1">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="email@example.com"
-                    className={`w-full border p-3 text-sm rounded ${errors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  />
-                  {errors.email && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.email}</p>}
-                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase mb-1">Street Address *</label>
-                <textarea
-                  name="address"
-                  rows="2"
-                  value={formData.address}
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1">
+                  City *
+                </label>
+                <input
+                  type="text"
+                  name="city"
+                  required
+                  value={formData.city}
                   onChange={handleChange}
-                  placeholder="House No, Street, Landmark"
-                  className={`w-full border p-3 text-sm rounded ${errors.address ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                  placeholder="Cuddapah"
+                  className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
                 />
-                {errors.address && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.address}</p>}
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase mb-1">Pincode (6 Digits) *</label>
-                  <input
-                    type="text"
-                    name="pincode"
-                    value={formData.pincode}
-                    onChange={handlePincodeChange}
-                    placeholder="e.g. 516101"
-                    className={`w-full border p-3 text-sm rounded ${errors.pincode ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  />
-                  {pincodeLoading && <p className="text-blue-600 text-[10px] font-bold mt-1">లొకేషన్ వెతుకుతోంది...</p>}
-                  {errors.pincode && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.pincode}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase mb-1">City *</label>
-                  <input
-                    type="text"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleChange}
-                    placeholder="City / District"
-                    className={`w-full border p-3 text-sm rounded ${errors.city ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  />
-                  {errors.city && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.city}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase mb-1">State *</label>
-                  <input
-                    type="text"
-                    name="state"
-                    value={formData.state}
-                    onChange={handleChange}
-                    placeholder="State"
-                    className={`w-full border p-3 text-sm rounded ${errors.state ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  />
-                  {errors.state && <p className="text-red-600 text-[11px] font-bold mt-1">{errors.state}</p>}
-                </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1">
+                  State *
+                </label>
+                <input
+                  type="text"
+                  name="state"
+                  required
+                  value={formData.state}
+                  onChange={handleChange}
+                  placeholder="Andhra Pradesh"
+                  className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
+                />
               </div>
-
-              {shippingMessage && (
-                <div className="p-2.5 bg-gray-100 border rounded text-xs font-bold text-gray-700 flex justify-between items-center">
-                  <span>📍 Location Zone:</span>
-                  <span className="text-purple-700">{shippingMessage}</span>
-                </div>
-              )}
             </div>
 
-            {/* 2. Payment Method */}
-            <h2 className="text-lg font-bold uppercase tracking-widest mt-10 mb-6 border-b pb-2">2. Payment Method</h2>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between border p-4 rounded bg-purple-50 border-purple-600 font-bold">
+            {/* LOCATION / SHIPPING ZONE */}
+            <div className="bg-purple-50 border border-purple-200 p-2.5 rounded flex items-center justify-between text-xs">
+              <span className="font-semibold text-purple-900">
+                📍 Location Zone:
+              </span>
+              <span className="font-bold text-purple-700">
+                {shippingInfo.zone} (₹{shippingFee})
+              </span>
+            </div>
+
+            {/* PAYMENT METHOD */}
+            <div className="pt-4 border-t">
+              <h3 className="text-xs font-bold uppercase tracking-wider mb-3">
+                2. Payment Method
+              </h3>
+
+              <div className="border-2 border-purple-600 bg-purple-50/20 p-4 rounded flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <input type="radio" checked={true} readOnly className="accent-purple-700 w-4 h-4" />
+                  <input
+                    type="radio"
+                    checked
+                    readOnly
+                    className="w-4 h-4 accent-purple-700"
+                  />
                   <div>
-                    <span className="text-purple-900">Direct PhonePe / UPI Dynamic Link</span>
-                    <p className="text-[11px] text-gray-600 font-normal">Opens PhonePe directly with exact order amount</p>
+                    <p className="text-xs font-bold text-purple-900">
+                      Direct PhonePe / UPI Dynamic Link & QR
+                    </p>
+                    <p className="text-[10px] text-gray-600">
+                      Instant Payment via PhonePe App or Official QR Scan
+                    </p>
                   </div>
                 </div>
-                <span className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded font-bold">Instant</span>
-              </label>
+                <span className="bg-purple-100 text-purple-800 text-[9px] font-bold px-2 py-0.5 rounded uppercase">
+                  Instant
+                </span>
+              </div>
+            </div>
+
+          </form>
+        </div>
+
+        {/* RIGHT: SUMMARY */}
+        <div className="lg:col-span-5 bg-gray-50 p-6 border border-gray-200 flex flex-col justify-between">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-4 border-b pb-2">
+              Order Summary ({cart.length} Items)
+            </h3>
+
+            <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2 mb-4">
+              {cart.map((item, idx) => (
+                <div key={idx} className="flex gap-3 items-center border-b pb-2">
+                  <img
+                    src={item.image || '/placeholder.png'}
+                    alt={item.name}
+                    className="w-12 h-12 object-contain border bg-white shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold uppercase truncate">{item.name}</p>
+                    <p className="text-[10px] text-gray-500">Size: {item.selectedSize || 'N/A'}</p>
+                  </div>
+                  <span className="text-xs font-bold">{item.price}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t pt-3 space-y-2 text-xs font-semibold">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>₹{subtotal}</span>
+              </div>
+              <div className="flex justify-between text-purple-800 font-bold">
+                <span>Shipping Fee ({shippingInfo.zone})</span>
+                <span>₹{shippingFee}</span>
+              </div>
+              <div className="flex justify-between text-sm font-black border-t pt-2 mt-2">
+                <span>Total Amount</span>
+                <span>₹{totalAmount}</span>
+              </div>
             </div>
           </div>
 
-          {/* Order Summary */}
-          <div className="bg-gray-50 border p-8 rounded h-fit">
-            <h2 className="text-md font-bold uppercase tracking-widest border-b pb-4 mb-6">
-              Order Summary ({cart.length} {cart.length === 1 ? 'Item' : 'Items'})
-            </h2>
-            
-            {cart.length === 0 ? (
-              <div className="text-center py-6 text-gray-500 text-sm">
-                మీ కార్ట్ ఖాళీగా ఉంది!
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-60 overflow-y-auto mb-6 pr-2">
-                {cart.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-sm border-b pb-3">
-                    <div className="flex items-center gap-3">
-                      <img src={item.image} alt={item.name} className="w-12 h-14 object-cover rounded border" />
-                      <div>
-                        <p className="font-bold text-xs uppercase">{item.name}</p>
-                        <p className="text-[11px] text-gray-500 font-bold">Size: {item.selectedSize}</p>
-                      </div>
-                    </div>
-                    <span className="font-semibold text-xs">{item.price}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+          <button
+            type="submit"
+            form="checkout-form"
+            className="w-full mt-6 bg-purple-700 text-white py-3.5 text-xs font-bold uppercase tracking-[0.18em] hover:bg-purple-800 transition shadow-md active:scale-95"
+          >
+            Pay Via PhonePe ₹{totalAmount}
+          </button>
+        </div>
 
-            <div className="space-y-2 border-t pt-4 text-sm">
-              <div className="flex justify-between text-gray-600">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toLocaleString('en-IN')}</span>
-              </div>
-              
-              <div className="flex justify-between text-gray-600 items-center">
-                <span>Shipping Fee</span>
-                {shippingCharge > 0 ? (
-                  <span className="font-bold text-black">₹{shippingCharge}</span>
-                ) : (
-                  <span className="text-gray-400 italic text-xs">పిన్ కోడ్ ఎంటర్ చేయండి</span>
-                )}
-              </div>
+      </main>
 
-              <div className="flex justify-between font-extrabold text-lg border-t pt-3 mt-3">
-                <span>Total Amount</span>
-                <span>₹{totalAmount.toLocaleString('en-IN')}</span>
-              </div>
+      {/* 💻 LAPTOP/DESKTOP QR CODE MODAL WITH YOUR PUBLIC QR IMAGE */}
+      {showDesktopQR && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white max-w-sm w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
+            <h3 className="text-base font-black uppercase text-purple-900">
+              Scan QR Code to Pay ₹{totalAmount}
+            </h3>
+            <p className="text-[11px] text-gray-600">
+              మీ ఫోన్‌లోని <b>PhonePe, Google Pay లేదా Paytm</b> ద్వారా ఈ క్రింది QR కోడ్‌ని స్కాన్ చేసి ₹{totalAmount} చెల్లించండి:
+            </p>
+
+            <div className="flex justify-center border p-3 rounded bg-gray-50 w-fit mx-auto">
+              <img 
+                src={QR_IMAGE_PATH} 
+                alt="PhonePe QR Code" 
+                className="w-56 h-auto object-contain rounded"
+                onError={(e) => {
+                  // ఒకవేళ ఫోటో దొరకకపోతే ఆటో-జనరేటెడ్ QR చూపిస్తుంది
+                  e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=upi://pay?pa=${STORE_UPI_ID}&pn=${encodeURIComponent(STORE_NAME)}&am=${totalAmount}&cu=INR`;
+                }}
+              />
             </div>
+
+            <p className="text-[11px] text-gray-700 font-bold">
+              UPI ID: <span className="text-purple-700">{STORE_UPI_ID}</span>
+            </p>
 
             <button
-              type="submit"
-              disabled={cart.length === 0}
-              className="w-full bg-purple-700 text-white py-4 mt-8 text-xs uppercase tracking-[0.2em] font-bold hover:bg-purple-800 transition disabled:bg-gray-400 cursor-pointer shadow-lg"
+              onClick={handleDesktopPaymentComplete}
+              className="w-full bg-emerald-600 text-white py-3 text-xs font-bold uppercase tracking-wider rounded hover:bg-emerald-700 transition"
             >
-              Pay via PhonePe ₹{totalAmount.toLocaleString('en-IN')}
+              ✓ I Have Completed Payment
             </button>
           </div>
+        </div>
+      )}
 
-        </form>
-      </div>
     </div>
   );
 }

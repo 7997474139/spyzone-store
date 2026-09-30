@@ -125,15 +125,32 @@ export default function AdminDashboard() {
     }
   };
 
+  // 🔴 సవరించబడిన డిలీట్ ఫంక్షన్ (MongoDB నుండి డిలీట్ చేస్తుంది)
   const handleRemoveProduct = async (id) => {
-    if (confirm('ఈ ప్రొడక్ట్‌ని తొలగించాలనుకుంటున్నారా?')) {
-      const filtered = products.filter((p) => (p._id || p.id) !== id);
-      setProducts(filtered);
+    if (!confirm('ఈ ప్రొడక్ట్‌ని డేటాబేస్ నుండి శాశ్వతంగా తొలగించాలనుకుంటున్నారా?')) return;
+
+    try {
+      const res = await fetch(`/api/product?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        alert('ప్రొడక్ట్ డేటాబేస్ నుండి విజయవంతంగా తొలగించబడింది!');
+        const filtered = products.filter((p) => (p._id || p.id) !== id);
+        setProducts(filtered);
+      } else {
+        alert('డిలీట్ చేయడంలో లోపం: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('సర్వర్ ఎర్రర్ వచ్చింది!');
     }
   };
 
   const handleDeleteOrder = (orderId) => {
-    if (confirm('ఈ ఆర్డర్‌‌‌ను డిలీట్ చేయాలనుకుంటున్నారా?')) {
+    if (confirm('ఈ ఆర్డర్ను డిలీట్ చేయాలనుకుంటున్నారా?')) {
       const updatedOrders = orders.filter((ord) => ord.orderId !== orderId);
       setOrders(updatedOrders);
       localStorage.setItem('spy_orders', JSON.stringify(updatedOrders));

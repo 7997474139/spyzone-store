@@ -85,27 +85,46 @@ export default function ProductDetailPage() {
     setIsCartOpen(true);
   };
 
-  // 3. Share Product Link Handler (WhatsApp & Direct Link)
+  // 3. 🚀 మోస్ట్ పవర్ ఫుల్ షేర్ హ్యాండ్లర్ (ఏ ఫోన్‌లోనైనా 100% వర్క్ అవుతుంది)
   const handleShare = async () => {
-    const currentUrl = window.location.href;
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const shareTitle = product ? `SPY ZONE - ${product.name}` : 'SPY ZONE Product';
+    const shareText = `Check out this product on SPY ZONE:\n*${product?.name || 'Product'}*\nPrice: ${product?.price || ''}\n\n`;
+
     const shareData = {
-      title: product ? `SPY ZONE - ${product.name}` : 'SPY ZONE Product',
-      text: `Check out this product on SPY ZONE: ${product?.name}`,
+      title: shareTitle,
+      text: shareText,
       url: currentUrl,
     };
 
-    // మొబైల్ ప్రొవైడర్లలో నేరుగా Share Sheet (WhatsApp, Telegram, etc.) ఓపెన్ అవుతుంది
-    if (navigator.share) {
+    // 📱 1. ఫోన్‌లలో ఒరిజినల్ Share Sheet ఓపెన్ చేయడానికి ప్రయత్నం (Chrome, Safari, etc.)
+    if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare(shareData)) {
       try {
         await navigator.share(shareData);
+        return;
       } catch (err) {
-        console.log('Share error or cancelled', err);
+        if (err.name === 'AbortError') return;
+        console.log('Native share error, switching to WhatsApp fallback:', err);
       }
+    }
+
+    // 📲 2. WhatsApp / Instagram In-App బ్రౌజర్‌‌లలో ఓపెన్ చేసినప్పుడు Fallback:
+    const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // నేరుగా వాట్సాప్ యాప్‌కి తీసుకెళ్తుంది
+      const fullMessage = encodeURIComponent(`${shareText}${currentUrl}`);
+      const whatsappShareUrl = `https://api.whatsapp.com/send?text=${fullMessage}`;
+      window.open(whatsappShareUrl, '_blank');
     } else {
-      // డెస్క్‌టాప్‌లో అయితే లింక్ క్లిప్‌బోర్డ్‌కి కాపీ అవుతుంది
-      navigator.clipboard.writeText(currentUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
+      // 💻 3. డెస్క్‌టాప్‌లో అయితే లింక్ కాపీ అవుతుంది
+      try {
+        await navigator.clipboard.writeText(currentUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      } catch (copyErr) {
+        console.error('Clipboard copy failed:', copyErr);
+      }
     }
   };
 
@@ -225,7 +244,7 @@ export default function ProductDetailPage() {
               <button
                 type="button"
                 onClick={handleShare}
-                className="w-full bg-emerald-600 text-white py-3 text-xs font-bold uppercase tracking-[0.18em] hover:bg-emerald-700 transition flex items-center justify-center gap-2"
+                className="w-full bg-emerald-600 text-white py-3 text-xs font-bold uppercase tracking-[0.18em] hover:bg-emerald-700 transition flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
               >
                 <span>🔗 Share Product Link</span>
               </button>

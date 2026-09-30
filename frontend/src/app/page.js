@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import Link from 'next/link';
+export const dynamic = 'force-dynamic';
 
 const categories = [
   'all',

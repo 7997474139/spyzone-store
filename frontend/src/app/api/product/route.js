@@ -56,3 +56,46 @@ export async function POST(req) {
     );
   }
 }
+
+// 3. DELETE: అడ్మిన్ ప్యానెల్ నుండి ప్రొడక్ట్‌ను డేటాబేస్ నుండి శాశ్వతంగా డిలీట్ చేయడం
+export async function DELETE(req) {
+  try {
+    await connectDB();
+
+    // Request ద్వారా పంపిన Product ID ని తీసుకోవడం
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body.id || body._id;
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Product ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // MongoDB Atlas డేటాబేస్ నుండి డిలీట్ చేయడం
+    const deletedProduct = await Product.findByIdAndDelete(id);
+
+    if (!deletedProduct) {
+      return NextResponse.json(
+        { success: false, error: 'Product not found in Database' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Product deleted from MongoDB successfully',
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: 'Failed to delete product: ' + error.message },
+      { status: 500 }
+    );
+  }
+}

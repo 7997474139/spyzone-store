@@ -5,15 +5,14 @@ import { useCart } from '../../context/CartContext';
 import Link from 'next/link';
 
 // ----------------------------------------------------
-// ⚙️ మీ వివరాలు ఇక్కడ అప్‌డేట్ చేయబడ్డాయి:
+// ⚙️ మీ వివరాలు:
 // ----------------------------------------------------
 const STORE_UPI_ID = "8978314516@ybl"; // 👈 మీ PhonePe UPI ID
 const STORE_NAME = "SPY ZONE";
-const OWNER_WHATSAPP_NUMBER = "917890644323"; // 👈 మీ వాట్సాప్ నంబర్
-const QR_IMAGE_PATH = "/qr-code.png"; // 👈 public/qr-code.png లో ఉన్న మీ Scanner ఫోటో
+const OWNER_WHATSAPP_NUMBER = "917997474139"; // 👈 మీ వాట్సాప్ నంబర్ (Country code 91 తో)
+const QR_IMAGE_PATH = "/qr-code.png";
 // ----------------------------------------------------
 
-// పిన్‌కోడ్ (516101 Base) ఆధారంగా డైనామిక్ షిప్పింగ్ ఛార్జీలు
 const calculateShippingFee = (pincode) => {
   const cleanPin = pincode ? pincode.trim() : '';
 
@@ -21,18 +20,15 @@ const calculateShippingFee = (pincode) => {
     return { fee: 40, zone: 'Local / Standard Zone' };
   }
 
-  // 1. రైల్వే కోడూరు & పరిసర ప్రాంతాలు (5161XX)
   if (cleanPin.startsWith('5161')) {
     return { fee: 40, zone: 'Local Koduru Zone (Railway Koduru Area)' };
   }
 
-  // 2. ఆంధ్రప్రదేశ్ & తెలంగాణ (50, 51, 52, 53)
   const prefix2 = cleanPin.substring(0, 2);
   if (['51', '52', '53', '50'].includes(prefix2)) {
     return { fee: 70, zone: 'Andhra Pradesh & Telangana Zone' };
   }
 
-  // 3. సౌత్ ఇండియా (కార్ణాటక, తమిళనాడు, కేరళ)
   const pinNum = parseInt(cleanPin, 10);
   if (
     (pinNum >= 560000 && pinNum <= 599999) ||
@@ -42,7 +38,6 @@ const calculateShippingFee = (pincode) => {
     return { fee: 90, zone: 'South India Regional Zone' };
   }
 
-  // 4. మిగతా భారతదేశం (Rest of India)
   return { fee: 120, zone: 'National Zone (Rest of India)' };
 };
 
@@ -60,13 +55,44 @@ export default function CheckoutPage() {
   });
 
   const [shippingInfo, setShippingInfo] = useState({ fee: 40, zone: 'Local / Standard Zone' });
+  const [loadingPincode, setLoadingPincode] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
   const [lastOrderDetails, setLastOrderDetails] = useState(null);
-  const [showDesktopQR, setShowDesktopQR] = useState(false);
 
+  // 🚀 పిన్ కోడ్ 6 డిజిట్లు కాగానే ఆటోమేటిక్‌గా City, State & Shipping Zone అప్‌డేట్ చేసే లాజిక్
   useEffect(() => {
-    const info = calculateShippingFee(formData.pincode);
+    const cleanPin = formData.pincode ? formData.pincode.trim() : '';
+
+    // 1. Shipping zone లెక్కించడం
+    const info = calculateShippingFee(cleanPin);
     setShippingInfo(info);
+
+    // 2. పిన్ కోడ్ సరిగ్గా 6 డిజిట్లు ఉన్నప్పుడు మాత్రమే API ని ఫెచ్ చేస్తుంది
+    if (cleanPin.length === 6) {
+      setLoadingPincode(true);
+      fetch(`https://api.postalpincode.in/pincode/${cleanPin}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data[0] && data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
+            const postOffice = data[0].PostOffice[0];
+            const detectedCity = postOffice.District || postOffice.Block || postOffice.Name;
+            const detectedState = postOffice.State;
+
+            // City మరియు State బాక్స్‌లలో వాల్యూస్ ఆటోమేటిక్‌గా నింపడం
+            setFormData((prev) => ({
+              ...prev,
+              city: detectedCity || prev.city,
+              state: detectedState || prev.state,
+            }));
+          }
+        })
+        .catch((err) => {
+          console.error('Error fetching pincode details:', err);
+        })
+        .finally(() => {
+          setLoadingPincode(false);
+        });
+    }
   }, [formData.pincode]);
 
   const subtotal = cart.reduce((total, item) => {
@@ -84,18 +110,11 @@ export default function CheckoutPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const isMobileDevice = () => {
-    if (typeof window !== 'undefined') {
-      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    }
-    return false;
-  };
-
-  const handlePaymentAndOrder = (e) => {
+  const handlePlaceOrder = (e) => {
     e.preventDefault();
 
-    if (!formData.fullName || !formData.phone || !formData.address || !formData.pincode) {
-      alert('దయచేసి అన్ని వివరాలను (Name, Phone, Address, Pincode) పూర్తి చేయండి!');
+    if (!formData.fullName || !formData.phone || !formData.address || !formData.pincode || !formData.city || !formData.state) {
+      alert('దయచేసి అన్ని వివరాలను (Name, Phone, Address, Pincode, City, State) పూర్తి చేయండి!');
       return;
     }
 
@@ -104,7 +123,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    // 1. WhatsApp Message (ఓనర్ కోసం)
     let itemsListText = cart
       .map(
         (item, idx) =>
@@ -112,7 +130,8 @@ export default function CheckoutPage() {
       )
       .join('\n');
 
-    const whatsappMessage = `🛍️ *NEW ORDER PLACED ON SPY ZONE* 🛍️\n\n` +
+    const whatsappMessage = 
+      `🛍️ *NEW ORDER PLACED ON SPY ZONE* 🛍️\n\n` +
       `👤 *Customer Name:* ${formData.fullName}\n` +
       `📞 *Phone:* ${formData.phone}\n` +
       `📧 *Email:* ${formData.email || 'N/A'}\n` +
@@ -121,45 +140,19 @@ export default function CheckoutPage() {
       `📦 *ORDER ITEMS:*\n${itemsListText}\n\n` +
       `💵 *Subtotal:* ₹${subtotal}\n` +
       `🚚 *Shipping Fee:* ₹${shippingFee}\n` +
-      `💰 *TOTAL AMOUNT:* ₹${totalAmount}\n\n` +
-      `💳 *Payment Method:* PhonePe / Direct UPI`;
+      `💰 *TOTAL PAID AMOUNT:* ₹${totalAmount}\n\n` +
+      `💳 *Payment Method:* PhonePe QR / UPI (${STORE_UPI_ID})`;
 
     const encodedMessage = encodeURIComponent(whatsappMessage);
     const ownerWhatsAppUrl = `https://wa.me/${OWNER_WHATSAPP_NUMBER}?text=${encodedMessage}`;
 
-    // 2. Dynamic UPI Direct Link
-    const upiUrl = `upi://pay?pa=${STORE_UPI_ID}&pn=${encodeURIComponent(STORE_NAME)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent('SPY ZONE Order')}`;
+    window.open(ownerWhatsAppUrl, '_blank');
 
-    if (isMobileDevice()) {
-      // 📱 మొబైల్‌లో నేరుగా PhonePe App ఓపెన్ అవుతుంది
-      window.location.href = upiUrl;
-
-      setTimeout(() => {
-        window.open(ownerWhatsAppUrl, '_blank');
-        setLastOrderDetails({
-          ...formData,
-          totalAmount,
-          shippingZone: shippingInfo.zone,
-        });
-        setOrderConfirmed(true);
-      }, 2000);
-    } else {
-      // 💻 ల్యాప్‌టాప్‌లో మీ public/qr-code.png ఫోటోతో మోడల్ ఓపెన్ అవుతుంది
-      setShowDesktopQR(true);
-      setLastOrderDetails({
-        ...formData,
-        totalAmount,
-        shippingZone: shippingInfo.zone,
-        ownerWhatsAppUrl,
-      });
-    }
-  };
-
-  const handleDesktopPaymentComplete = () => {
-    setShowDesktopQR(false);
-    if (lastOrderDetails?.ownerWhatsAppUrl) {
-      window.open(lastOrderDetails.ownerWhatsAppUrl, '_blank');
-    }
+    setLastOrderDetails({
+      ...formData,
+      totalAmount,
+      shippingZone: shippingInfo.zone,
+    });
     setOrderConfirmed(true);
   };
 
@@ -171,22 +164,22 @@ export default function CheckoutPage() {
             ✓
           </div>
           <h1 className="text-2xl font-black uppercase tracking-wide text-gray-900 mb-2">
-            Your Order is Confirmed! 🎉
+            Order Submitted! 🎉
           </h1>
           <p className="text-xs text-gray-600 mb-6">
-            ధన్యవాదాలు <b>{lastOrderDetails?.fullName}</b>! మీ ఆర్డర్ వివరాలు మరియు డెలివరీ అడ్రస్ స్వీకరించబడ్డాయి.
+            ధన్యవాదాలు <b>{lastOrderDetails?.fullName}</b>! మీ ఆర్డర్ వివరాలు షాప్ ఓనర్ వాట్సాప్‌కి పంపబడ్డాయి.
           </p>
 
           <div className="bg-gray-50 p-4 rounded text-left border text-xs space-y-2 mb-6">
             <p><b>Total Amount:</b> ₹{lastOrderDetails?.totalAmount}</p>
             <p><b>Mobile:</b> {lastOrderDetails?.phone}</p>
             <p><b>Shipping Zone:</b> {lastOrderDetails?.shippingZone}</p>
-            <p><b>Delivery Address:</b> {lastOrderDetails?.address}, {lastOrderDetails?.city} - {lastOrderDetails?.pincode}</p>
+            <p><b>Delivery Address:</b> {lastOrderDetails?.address}, {lastOrderDetails?.city}, {lastOrderDetails?.state} - {lastOrderDetails?.pincode}</p>
           </div>
 
           <Link
             href="/"
-            className="block w-full bg-black text-white py-3 text-xs uppercase font-bold tracking-widest hover:bg-gray-800 transition"
+            className="block w-full bg-black text-white py-3 text-xs uppercase font-bold tracking-widest hover:bg-gray-800 transition rounded text-center"
           >
             Continue Shopping
           </Link>
@@ -210,8 +203,12 @@ export default function CheckoutPage() {
         
         {/* LEFT: FORM */}
         <div className="lg:col-span-7 space-y-6">
-          <form id="checkout-form" onSubmit={handlePaymentAndOrder} className="space-y-4">
+          <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
             
+            <h2 className="text-xs font-bold uppercase tracking-wider mb-2 border-b pb-1">
+              1. Delivery Details
+            </h2>
+
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider mb-1">
                 Full Name *
@@ -238,7 +235,7 @@ export default function CheckoutPage() {
                   required
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="Ex: 7890644323"
+                  placeholder="Ex: 96678537353"
                   className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
                 />
               </div>
@@ -275,8 +272,9 @@ export default function CheckoutPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1">
-                  Pincode *
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center justify-between">
+                  <span>Pincode *</span>
+                  {loadingPincode && <span className="text-[9px] text-purple-600 font-normal animate-pulse">Fetching...</span>}
                 </label>
                 <input
                   type="text"
@@ -285,7 +283,7 @@ export default function CheckoutPage() {
                   maxLength={6}
                   value={formData.pincode}
                   onChange={handleChange}
-                  placeholder="516101"
+                  placeholder="500001"
                   className="w-full border border-purple-500 bg-purple-50/20 p-2.5 text-xs font-bold focus:outline-none"
                 />
               </div>
@@ -300,7 +298,7 @@ export default function CheckoutPage() {
                   required
                   value={formData.city}
                   onChange={handleChange}
-                  placeholder="Cuddapah"
+                  placeholder="City / District"
                   className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
                 />
               </div>
@@ -315,7 +313,7 @@ export default function CheckoutPage() {
                   required
                   value={formData.state}
                   onChange={handleChange}
-                  placeholder="Andhra Pradesh"
+                  placeholder="State"
                   className="w-full border border-gray-300 p-2.5 text-xs focus:outline-none focus:border-black"
                 />
               </div>
@@ -331,32 +329,50 @@ export default function CheckoutPage() {
               </span>
             </div>
 
-            {/* PAYMENT METHOD */}
+            {/* PAYMENT SECTION WITH QR & UPI ID */}
             <div className="pt-4 border-t">
               <h3 className="text-xs font-bold uppercase tracking-wider mb-3">
-                2. Payment Method
+                2. Payment via PhonePe / GPay QR
               </h3>
 
-              <div className="border-2 border-purple-600 bg-purple-50/20 p-4 rounded flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="radio"
-                    checked
-                    readOnly
-                    className="w-4 h-4 accent-purple-700"
+              <div className="border-2 border-purple-600 bg-purple-50/30 p-4 rounded-lg text-center space-y-3">
+                <p className="text-xs font-bold text-purple-900">
+                  ఈ క్రింది QR కోడ్‌ని స్కాన్ చేసి ₹{totalAmount} చెల్లించండి:
+                </p>
+
+                {/* QR CODE IMAGE */}
+                <div className="flex justify-center border-2 border-purple-200 p-2 rounded bg-white w-fit mx-auto shadow-sm">
+                  <img 
+                    src={QR_IMAGE_PATH} 
+                    alt="PhonePe QR Code" 
+                    className="w-52 h-auto object-contain rounded"
+                    onError={(e) => {
+                      e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=upi://pay?pa=${STORE_UPI_ID}&pn=${encodeURIComponent(STORE_NAME)}&am=${totalAmount}&cu=INR`;
+                    }}
                   />
-                  <div>
-                    <p className="text-xs font-bold text-purple-900">
-                      Direct PhonePe / UPI Dynamic Link & QR
-                    </p>
-                    <p className="text-[10px] text-gray-600">
-                      Instant Payment via PhonePe App or Official QR Scan
-                    </p>
-                  </div>
                 </div>
-                <span className="bg-purple-100 text-purple-800 text-[9px] font-bold px-2 py-0.5 rounded uppercase">
-                  Instant
-                </span>
+
+                {/* COPY UPI ID */}
+                <div className="bg-white border border-purple-200 p-2 rounded max-w-xs mx-auto flex items-center justify-between">
+                  <div className="text-left">
+                    <p className="text-[9px] text-gray-500 uppercase font-bold">UPI ID</p>
+                    <p className="text-xs font-bold text-purple-900">{STORE_UPI_ID}</p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(STORE_UPI_ID);
+                      alert("UPI ID Copied: " + STORE_UPI_ID);
+                    }}
+                    className="text-[10px] bg-purple-700 text-white px-2.5 py-1 rounded font-bold hover:bg-purple-800 transition"
+                  >
+                    COPY
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-600 font-medium">
+                  పేమెంట్ పూర్తయిన తర్వాత క్రింది బటన్ క్లిక్ చేసి ఆర్డర్‌ను వాట్సాప్‌లో ఓనర్‌కి పంపండి.
+                </p>
               </div>
             </div>
 
@@ -364,7 +380,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* RIGHT: SUMMARY */}
-        <div className="lg:col-span-5 bg-gray-50 p-6 border border-gray-200 flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-gray-50 p-6 border border-gray-200 flex flex-col justify-between h-fit">
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider mb-4 border-b pb-2">
               Order Summary ({cart.length} Items)
@@ -406,50 +422,13 @@ export default function CheckoutPage() {
           <button
             type="submit"
             form="checkout-form"
-            className="w-full mt-6 bg-purple-700 text-white py-3.5 text-xs font-bold uppercase tracking-[0.18em] hover:bg-purple-800 transition shadow-md active:scale-95"
+            className="w-full mt-6 bg-emerald-600 text-white py-4 text-xs font-bold uppercase tracking-[0.15em] hover:bg-emerald-700 transition shadow-lg active:scale-95 cursor-pointer rounded"
           >
-            Pay Via PhonePe ₹{totalAmount}
+            ✅ Send Order Details to WhatsApp (₹{totalAmount})
           </button>
         </div>
 
       </main>
-
-      {/* 💻 LAPTOP/DESKTOP QR CODE MODAL WITH YOUR PUBLIC QR IMAGE */}
-      {showDesktopQR && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white max-w-sm w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
-            <h3 className="text-base font-black uppercase text-purple-900">
-              Scan QR Code to Pay ₹{totalAmount}
-            </h3>
-            <p className="text-[11px] text-gray-600">
-              మీ ఫోన్‌లోని <b>PhonePe, Google Pay లేదా Paytm</b> ద్వారా ఈ క్రింది QR కోడ్‌ని స్కాన్ చేసి ₹{totalAmount} చెల్లించండి:
-            </p>
-
-            <div className="flex justify-center border p-3 rounded bg-gray-50 w-fit mx-auto">
-              <img 
-                src={QR_IMAGE_PATH} 
-                alt="PhonePe QR Code" 
-                className="w-56 h-auto object-contain rounded"
-                onError={(e) => {
-                  // ఒకవేళ ఫోటో దొరకకపోతే ఆటో-జనరేటెడ్ QR చూపిస్తుంది
-                  e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=upi://pay?pa=${STORE_UPI_ID}&pn=${encodeURIComponent(STORE_NAME)}&am=${totalAmount}&cu=INR`;
-                }}
-              />
-            </div>
-
-            <p className="text-[11px] text-gray-700 font-bold">
-              UPI ID: <span className="text-purple-700">{STORE_UPI_ID}</span>
-            </p>
-
-            <button
-              onClick={handleDesktopPaymentComplete}
-              className="w-full bg-emerald-600 text-white py-3 text-xs font-bold uppercase tracking-wider rounded hover:bg-emerald-700 transition"
-            >
-              ✓ I Have Completed Payment
-            </button>
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -9,7 +9,7 @@ import Link from 'next/link';
 // ----------------------------------------------------
 const STORE_UPI_ID = "8978314516@ybl"; // 👈 మీ PhonePe UPI ID
 const STORE_NAME = "SPY ZONE";
-const OWNER_WHATSAPP_NUMBER = "917997474139"; // 👈 మీ వాట్సాప్ నంబర్ (Country code 91 తో)
+const OWNER_WHATSAPP_NUMBER = "918978314516"; // 👈 మీ వాట్సాప్ నంబర్ (Country code 91 తో)
 const QR_IMAGE_PATH = "/qr-code.png";
 // ----------------------------------------------------
 

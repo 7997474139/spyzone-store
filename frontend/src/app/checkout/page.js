@@ -9,37 +9,9 @@ import Link from 'next/link';
 // ----------------------------------------------------
 const STORE_UPI_ID = "8978314516@ybl"; // 👈 మీ PhonePe UPI ID
 const STORE_NAME = "SPY ZONE";
-const OWNER_WHATSAPP_NUMBER = "918978314516"; // 👈 మీ వాట్సాప్ నంబర్ (Country code 91 తో)
+const OWNER_WHATSAPP_NUMBER = "918978314516"; // 👈 మీ వాట్సాప్ నంబర్
 const QR_IMAGE_PATH = "/qr-code.png";
 // ----------------------------------------------------
-
-const calculateShippingFee = (pincode) => {
-  const cleanPin = pincode ? pincode.trim() : '';
-
-  if (cleanPin.length < 6) {
-    return { fee: 40, zone: 'Local / Standard Zone' };
-  }
-
-  if (cleanPin.startsWith('5161')) {
-    return { fee: 40, zone: 'Local Koduru Zone (Railway Koduru Area)' };
-  }
-
-  const prefix2 = cleanPin.substring(0, 2);
-  if (['51', '52', '53', '50'].includes(prefix2)) {
-    return { fee: 70, zone: 'Andhra Pradesh & Telangana Zone' };
-  }
-
-  const pinNum = parseInt(cleanPin, 10);
-  if (
-    (pinNum >= 560000 && pinNum <= 599999) ||
-    (pinNum >= 600000 && pinNum <= 649999) ||
-    (pinNum >= 670000 && pinNum <= 699999)
-  ) {
-    return { fee: 90, zone: 'South India Regional Zone' };
-  }
-
-  return { fee: 120, zone: 'National Zone (Rest of India)' };
-};
 
 export default function CheckoutPage() {
   const { cart } = useCart();
@@ -54,20 +26,15 @@ export default function CheckoutPage() {
     state: '',
   });
 
-  const [shippingInfo, setShippingInfo] = useState({ fee: 40, zone: 'Local / Standard Zone' });
   const [loadingPincode, setLoadingPincode] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
   const [lastOrderDetails, setLastOrderDetails] = useState(null);
 
-  // 🚀 పిన్ కోడ్ 6 డిజిట్లు కాగానే ఆటోమేటిక్‌గా City, State & Shipping Zone అప్‌డేట్ చేసే లాజిక్
+  // 🚀 పిన్ కోడ్ 6 డిజిట్లు కాగానే ఆటోమేటిక్‌గా City, State అప్‌డేట్ చేసే లాజిక్
   useEffect(() => {
     const cleanPin = formData.pincode ? formData.pincode.trim() : '';
 
-    // 1. Shipping zone లెక్కించడం
-    const info = calculateShippingFee(cleanPin);
-    setShippingInfo(info);
-
-    // 2. పిన్ కోడ్ సరిగ్గా 6 డిజిట్లు ఉన్నప్పుడు మాత్రమే API ని ఫెచ్ చేస్తుంది
     if (cleanPin.length === 6) {
       setLoadingPincode(true);
       fetch(`https://api.postalpincode.in/pincode/${cleanPin}`)
@@ -78,7 +45,6 @@ export default function CheckoutPage() {
             const detectedCity = postOffice.District || postOffice.Block || postOffice.Name;
             const detectedState = postOffice.State;
 
-            // City మరియు State బాక్స్‌లలో వాల్యూస్ ఆటోమేటిక్‌గా నింపడం
             setFormData((prev) => ({
               ...prev,
               city: detectedCity || prev.city,
@@ -103,14 +69,15 @@ export default function CheckoutPage() {
     return total + priceNum;
   }, 0);
 
-  const shippingFee = subtotal > 0 ? shippingInfo.fee : 0;
-  const totalAmount = subtotal + shippingFee;
+  const shippingFee = 0;
+  const totalAmount = subtotal;
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handlePlaceOrder = (e) => {
+  // 🚀 ఆర్డర్‌ను డేటాబేస్‌లో సేవ్ చేసి వాట్సాప్‌కి పంపించే ఫంక్షన్
+  const handlePlaceOrder = async (e) => {
     e.preventDefault();
 
     if (!formData.fullName || !formData.phone || !formData.address || !formData.pincode || !formData.city || !formData.state) {
@@ -123,37 +90,77 @@ export default function CheckoutPage() {
       return;
     }
 
-    let itemsListText = cart
-      .map(
-        (item, idx) =>
-          `${idx + 1}. ${item.name} (Size: ${item.selectedSize || 'N/A'}) - ${item.price}`
-      )
-      .join('\n');
+    setSubmitting(true);
 
-    const whatsappMessage = 
-      `🛍️ *NEW ORDER PLACED ON SPY ZONE* 🛍️\n\n` +
-      `👤 *Customer Name:* ${formData.fullName}\n` +
-      `📞 *Phone:* ${formData.phone}\n` +
-      `📧 *Email:* ${formData.email || 'N/A'}\n` +
-      `🏠 *Address:* ${formData.address}, ${formData.city}, ${formData.state} - ${formData.pincode}\n` +
-      `📍 *Shipping Zone:* ${shippingInfo.zone}\n\n` +
-      `📦 *ORDER ITEMS:*\n${itemsListText}\n\n` +
-      `💵 *Subtotal:* ₹${subtotal}\n` +
-      `🚚 *Shipping Fee:* ₹${shippingFee}\n` +
-      `💰 *TOTAL PAID AMOUNT:* ₹${totalAmount}\n\n` +
-      `💳 *Payment Method:* PhonePe QR / UPI (${STORE_UPI_ID})`;
+    const generatedOrderId = `SPY-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const encodedMessage = encodeURIComponent(whatsappMessage);
-    const ownerWhatsAppUrl = `https://wa.me/${OWNER_WHATSAPP_NUMBER}?text=${encodedMessage}`;
+    const orderData = {
+      orderId: generatedOrderId,
+      shippingAddress: {
+        fullName: formData.fullName,
+        phone: formData.phone,
+        email: formData.email || '',
+        address: formData.address,
+        city: formData.city,
+        pincode: formData.pincode,
+        state: formData.state,
+      },
+      items: cart,
+      totalAmount: totalAmount,
+      paymentMethod: 'phonepe',
+      date: new Date().toLocaleString('en-IN'),
+    };
 
-    window.open(ownerWhatsAppUrl, '_blank');
+    try {
+      // 1️⃣ Database లోకి ఆర్డర్ డేటాను సేవ్ చేయడానికి API Call
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderData),
+      });
 
-    setLastOrderDetails({
-      ...formData,
-      totalAmount,
-      shippingZone: shippingInfo.zone,
-    });
-    setOrderConfirmed(true);
+      // 2️⃣ WhatsApp Message ప్రెపరేషన్
+      let itemsListText = cart
+        .map(
+          (item, idx) =>
+            `${idx + 1}. ${item.name} (Size: ${item.selectedSize || 'N/A'}) - ${item.price}`
+        )
+        .join('\n');
+
+      const whatsappMessage = 
+        `🛍️️ *NEW ORDER PLACED ON SPY ZONE* 🛍\n\n` +
+        `🆔 *Order ID:* ${generatedOrderId}\n` +
+        `👤 *Customer Name:* ${formData.fullName}\n` +
+        `📞 *Phone:* ${formData.phone}\n` +
+        `📧 *Email:* ${formData.email || 'N/A'}\n` +
+        `🏠 *Address:* ${formData.address}, ${formData.city}, ${formData.state} - ${formData.pincode}\n` +
+        `📍 *Shipping:* FREE DELIVERY (All Over India)\n\n` +
+        `📦 *ORDER ITEMS:*\n${itemsListText}\n\n` +
+        `💵 *Subtotal:* ₹${subtotal}\n` +
+        `🚚 *Shipping Fee:* FREE\n` +
+        `💰 *TOTAL PAID AMOUNT:* ₹${totalAmount}\n\n` +
+        `💳 *Payment Method:* PhonePe QR / UPI (${STORE_UPI_ID})`;
+
+      const encodedMessage = encodeURIComponent(whatsappMessage);
+      const ownerWhatsAppUrl = `https://wa.me/${OWNER_WHATSAPP_NUMBER}?text=${encodedMessage}`;
+
+      // వాట్సాప్ విండో ఓపెన్ చేయడం
+      window.open(ownerWhatsAppUrl, '_blank');
+
+      setLastOrderDetails({
+        ...formData,
+        totalAmount,
+        shippingZone: 'Free Delivery Across India',
+      });
+      setOrderConfirmed(true);
+    } catch (err) {
+      console.error('Failed to save order:', err);
+      alert('ఆర్డర్ సేవ్ చేయడంలో సమస్య వచ్చింది. దయచేసి మళ్ళీ ప్రయత్నించండి.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (orderConfirmed) {
@@ -173,7 +180,7 @@ export default function CheckoutPage() {
           <div className="bg-gray-50 p-4 rounded text-left border text-xs space-y-2 mb-6">
             <p><b>Total Amount:</b> ₹{lastOrderDetails?.totalAmount}</p>
             <p><b>Mobile:</b> {lastOrderDetails?.phone}</p>
-            <p><b>Shipping Zone:</b> {lastOrderDetails?.shippingZone}</p>
+            <p><b>Shipping:</b> Free Delivery</p>
             <p><b>Delivery Address:</b> {lastOrderDetails?.address}, {lastOrderDetails?.city}, {lastOrderDetails?.state} - {lastOrderDetails?.pincode}</p>
           </div>
 
@@ -319,17 +326,16 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* LOCATION / SHIPPING ZONE */}
-            <div className="bg-purple-50 border border-purple-200 p-2.5 rounded flex items-center justify-between text-xs">
-              <span className="font-semibold text-purple-900">
+            <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded flex items-center justify-between text-xs">
+              <span className="font-semibold text-emerald-900">
                 📍 Location Zone:
               </span>
-              <span className="font-bold text-purple-700">
-                {shippingInfo.zone} (₹{shippingFee})
+              <span className="font-bold text-emerald-700">
+                Free Delivery Across India
               </span>
             </div>
 
-            {/* PAYMENT SECTION WITH QR & UPI ID */}
+            {/* PAYMENT SECTION */}
             <div className="pt-4 border-t">
               <h3 className="text-xs font-bold uppercase tracking-wider mb-3">
                 2. Payment via PhonePe / GPay QR
@@ -340,7 +346,6 @@ export default function CheckoutPage() {
                   ఈ క్రింది QR కోడ్‌ని స్కాన్ చేసి ₹{totalAmount} చెల్లించండి:
                 </p>
 
-                {/* QR CODE IMAGE */}
                 <div className="flex justify-center border-2 border-purple-200 p-2 rounded bg-white w-fit mx-auto shadow-sm">
                   <img 
                     src={QR_IMAGE_PATH} 
@@ -352,7 +357,6 @@ export default function CheckoutPage() {
                   />
                 </div>
 
-                {/* COPY UPI ID */}
                 <div className="bg-white border border-purple-200 p-2 rounded max-w-xs mx-auto flex items-center justify-between">
                   <div className="text-left">
                     <p className="text-[9px] text-gray-500 uppercase font-bold">UPI ID</p>
@@ -408,9 +412,9 @@ export default function CheckoutPage() {
                 <span>Subtotal</span>
                 <span>₹{subtotal}</span>
               </div>
-              <div className="flex justify-between text-purple-800 font-bold">
-                <span>Shipping Fee ({shippingInfo.zone})</span>
-                <span>₹{shippingFee}</span>
+              <div className="flex justify-between text-emerald-700 font-bold">
+                <span>Shipping Fee</span>
+                <span>FREE</span>
               </div>
               <div className="flex justify-between text-sm font-black border-t pt-2 mt-2">
                 <span>Total Amount</span>
@@ -422,9 +426,12 @@ export default function CheckoutPage() {
           <button
             type="submit"
             form="checkout-form"
-            className="w-full mt-6 bg-emerald-600 text-white py-4 text-xs font-bold uppercase tracking-[0.15em] hover:bg-emerald-700 transition shadow-lg active:scale-95 cursor-pointer rounded"
+            disabled={submitting}
+            className="w-full mt-6 bg-emerald-600 text-white py-4 text-xs font-bold uppercase tracking-[0.15em] hover:bg-emerald-700 transition shadow-lg active:scale-95 cursor-pointer rounded disabled:bg-gray-400"
           >
-            ✅ Send Order Details to WhatsApp (₹{totalAmount})
+            {submitting
+              ? 'Processing Order...'
+              : `✅ Send Order Details to WhatsApp (₹${totalAmount})`}
           </button>
         </div>
 

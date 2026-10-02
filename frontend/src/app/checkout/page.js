@@ -9,7 +9,7 @@ import Link from 'next/link';
 // ----------------------------------------------------
 const STORE_UPI_ID = "8978314516@ybl"; // 👈 మీ PhonePe UPI ID
 const STORE_NAME = "SPY ZONE";
-const OWNER_WHATSAPP_NUMBER = "918978314516"; // 👈 మీ వాట్సాప్ నంబర్
+const OWNER_WHATSAPP_NUMBER = "917997474139"; // 👈 మీ వాట్సాప్ నంబర్
 const QR_IMAGE_PATH = "/qr-code.png";
 // ----------------------------------------------------
 
@@ -94,6 +94,7 @@ export default function CheckoutPage() {
 
     const generatedOrderId = `SPY-${Math.floor(100000 + Math.random() * 900000)}`;
 
+    // 💡 Schema Mismatch రాకుండా నెస్ట్ డేటా & ఫ్లాట్ డేటా రెండూ పంపుతున్నాం
     const orderData = {
       orderId: generatedOrderId,
       shippingAddress: {
@@ -105,6 +106,13 @@ export default function CheckoutPage() {
         pincode: formData.pincode,
         state: formData.state,
       },
+      name: formData.fullName,
+      phone: formData.phone,
+      email: formData.email || '',
+      address: formData.address,
+      city: formData.city,
+      pincode: formData.pincode,
+      state: formData.state,
       items: cart,
       totalAmount: totalAmount,
       paymentMethod: 'phonepe',
@@ -113,7 +121,7 @@ export default function CheckoutPage() {
 
     try {
       // 1️⃣ Database లోకి ఆర్డర్ డేటాను సేవ్ చేయడానికి API Call
-      await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,7 +129,14 @@ export default function CheckoutPage() {
         body: JSON.stringify(orderData),
       });
 
-      // 2️⃣ WhatsApp Message ప్రెపరేషన్
+      const resData = await res.json();
+
+      // 🚨 API ఫెయిల్ అయితే ముందే అలర్ట్ చూపించి ఆపుతుంది
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || resData.message || 'డేటాబేస్‌లో ఆర్డర్ సేవ్ కాలేదు!');
+      }
+
+      // 2️⃣ Database లో విజయవంతంగా సేవ్ అయిన తర్వాతే WhatsApp ఓపెన్ అవుతుంది
       let itemsListText = cart
         .map(
           (item, idx) =>
@@ -130,7 +145,7 @@ export default function CheckoutPage() {
         .join('\n');
 
       const whatsappMessage = 
-        `🛍️️ *NEW ORDER PLACED ON SPY ZONE* 🛍\n\n` +
+        `🛍 *NEW ORDER PLACED ON SPY ZONE* 🛍\n\n` +
         `🆔 *Order ID:* ${generatedOrderId}\n` +
         `👤 *Customer Name:* ${formData.fullName}\n` +
         `📞 *Phone:* ${formData.phone}\n` +
@@ -146,7 +161,6 @@ export default function CheckoutPage() {
       const encodedMessage = encodeURIComponent(whatsappMessage);
       const ownerWhatsAppUrl = `https://wa.me/${OWNER_WHATSAPP_NUMBER}?text=${encodedMessage}`;
 
-      // వాట్సాప్ విండో ఓపెన్ చేయడం
       window.open(ownerWhatsAppUrl, '_blank');
 
       setLastOrderDetails({
@@ -157,7 +171,7 @@ export default function CheckoutPage() {
       setOrderConfirmed(true);
     } catch (err) {
       console.error('Failed to save order:', err);
-      alert('ఆర్డర్ సేవ్ చేయడంలో సమస్య వచ్చింది. దయచేసి మళ్ళీ ప్రయత్నించండి.');
+      alert(`ఆర్డర్ సేవ్ చేయడంలో సమస్య వచ్చింది: ${err.message}`);
     } finally {
       setSubmitting(false);
     }

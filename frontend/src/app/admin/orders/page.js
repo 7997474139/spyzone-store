@@ -6,20 +6,41 @@ import Link from 'next/link';
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // 🔄 API నుండి ఆర్డర్లను తెచ్చుకునే ఫంక్షన్
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders', { cache: 'no-store' });
-      const data = await res.json();
+      // 💡 Caching ని పూర్తిగా బైపాస్ చేయడానికి Timestamp (?t=...) యాడ్ చేసాం
+      const res = await fetch(`/api/orders?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      });
 
-      if (data.success && Array.isArray(data.orders)) {
-        setOrders(data.orders);
-      } else if (Array.isArray(data)) {
-        setOrders(data);
+      if (!res.ok) {
+        throw new Error(`Server status: ${res.status}`);
       }
+
+      const data = await res.json();
+      console.log('Fetched Orders API Data:', data); // F12 Console లో డేటాని చూడవచ్చు
+
+      let loadedOrders = [];
+      if (data.success && Array.isArray(data.orders)) {
+        loadedOrders = data.orders;
+      } else if (Array.isArray(data)) {
+        loadedOrders = data;
+      } else if (data.orders && Array.isArray(data.orders)) {
+        loadedOrders = data.orders;
+      }
+
+      setOrders(loadedOrders);
+      setErrorMsg('');
     } catch (err) {
       console.error('Error fetching orders:', err);
+      setErrorMsg(err.message || 'ఆర్డర్లు లోడ్ చేయడంలో విఫలమైంది');
     } finally {
       setLoading(false);
     }
@@ -70,7 +91,10 @@ export default function AdminOrdersPage() {
 
           <div className="flex gap-3 items-center">
             <button
-              onClick={fetchOrders}
+              onClick={() => {
+                setLoading(true);
+                fetchOrders();
+              }}
               className="text-xs bg-gray-200 text-black border px-3 py-1.5 uppercase font-bold hover:bg-gray-300 rounded"
             >
               🔄 Refresh
@@ -103,6 +127,12 @@ export default function AdminOrdersPage() {
               </button>
             )}
           </div>
+
+          {errorMsg && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 text-xs rounded">
+              ⚠️ {errorMsg}
+            </div>
+          )}
 
           {loading ? (
             <div className="text-center py-12 text-xs font-semibold text-gray-500">

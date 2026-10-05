@@ -2,7 +2,8 @@ import ProductDetailClient from './ProductDetailClient';
 
 async function getProduct(id) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://spyzone-store.onrender.com';
+    // 🚀 Vercel Free Domain Link
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://spyzone-2o-store-git-main-spyzone.vercel.app';
     const res = await fetch(`${baseUrl}/api/product`, { cache: 'no-store' });
     const data = await res.json();
 
@@ -17,10 +18,12 @@ async function getProduct(id) {
   return null;
 }
 
-// 🚀 ఈ ఫంక్షన్ ద్వారా సర్వర్‌లోనే వాట్సాప్ కోసం ప్రొడక్ట్ ఫోటో మరియు టైటిల్ జనరేట్ అవుతాయి
+// 🚀 వాట్సాప్ ప్రివ్యూ మరియు SEO కోసం Vercel డొమైన్ ఆధారంగా మెటాడేటా
 export async function generateMetadata({ params }) {
   const { id } = await params;
   const product = await getProduct(id);
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://spyzone-2o-store-git-main-spyzone.vercel.app';
 
   if (!product) {
     return {
@@ -28,7 +31,7 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const imageUrl = product.image || 'https://spyzone-store.onrender.com/logo.png';
+  const imageUrl = product.image || `${baseUrl}/logo.png`;
 
   return {
     title: `${product.name} | SPY ZONE`,
@@ -36,7 +39,7 @@ export async function generateMetadata({ params }) {
     openGraph: {
       title: `${product.name} | SPY ZONE`,
       description: `Price: ₹${product.price}`,
-      url: `https://spyzone-store.onrender.com/product/${id}`,
+      url: `${baseUrl}/product/${id}`,
       siteName: 'SPY ZONE',
       images: [
         {

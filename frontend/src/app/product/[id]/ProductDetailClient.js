@@ -19,6 +19,12 @@ export default function ProductDetailClient({ product }) {
   const [selectedSize, setSelectedSize] = useState(availableSizes.length === 1 ? availableSizes[0] : '');
   const [copied, setCopied] = useState(false);
 
+  // 🚀 మల్టిపుల్ యాంగిల్ ఫోటోల కోసం ఇమేజ్ లిస్ట్ & ఆక్టివ్ ఫోటో స్టేట్ (కొత్తగా చేర్చిన అప్‌డేట్)
+  const imageList = Array.isArray(product?.images) && product.images.length > 0
+    ? product.images
+    : (product?.image ? [product.image] : []);
+  const [activeImage, setActiveImage] = useState(imageList[0] || '');
+
   if (!product) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 text-center">
@@ -98,12 +104,36 @@ export default function ProductDetailClient({ product }) {
 
       <main className="max-w-[1200px] mx-auto px-4 md:px-8 py-8 md:py-14">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 items-start">
-          <div className="bg-[#f8f8f8] border border-gray-200 aspect-square w-full flex items-center justify-center p-4">
-            {product.image ? (
-              <img src={product.image} alt={product.name} className="max-h-full max-w-full object-contain" />
-            ) : (
-              <div className="text-xs text-gray-400 uppercase font-bold tracking-wider">No Image Available</div>
+          
+          {/* 🖼️ ఇమేజ్ గ్యాలరీ (Main Image + Amazon/Flipkart Style Thumbnails) */}
+          <div className="flex flex-col-reverse md:flex-row gap-4 w-full">
+            
+            {/* 📸 మల్టిపుల్ యాంగిల్స్ ఉన్నప్పుడు మాత్రమే కనిపిస్తాయి */}
+            {imageList.length > 1 && (
+              <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto max-h-[500px]">
+                {imageList.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveImage(img)}
+                    className={`w-16 h-16 md:w-20 md:h-20 border-2 rounded p-1 transition flex-shrink-0 bg-[#f8f8f8] ${
+                      (activeImage || imageList[0]) === img ? 'border-black opacity-100' : 'border-gray-200 opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={img} alt={`Angle ${idx + 1}`} className="w-full h-full object-contain" />
+                  </button>
+                ))}
+              </div>
             )}
+
+            {/* 🖼️ మెయిన్ ఇమేజ్ డిస్‌ప్లే */}
+            <div className="bg-[#f8f8f8] border border-gray-200 aspect-square w-full flex-1 flex items-center justify-center p-4 rounded">
+              {(activeImage || product?.image) ? (
+                <img src={activeImage || product?.image} alt={product.name} className="max-h-full max-w-full object-contain transition-all duration-300" />
+              ) : (
+                <div className="text-xs text-gray-400 uppercase font-bold tracking-wider">No Image Available</div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col justify-between">

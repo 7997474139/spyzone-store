@@ -22,10 +22,12 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('orders');
   const [loading, setLoading] = useState(false);
 
+  // 🚀 4 ఇమేజ్ యాంగిల్స్ స్లాట్‌లతో newProduct స్టేట్
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
     image: '',
+    images: ['', '', '', ''], // Front, Back, Side, Extra View slots
     category: 'shirts',
     sizes: ['S', 'M', 'L'],
   });
@@ -44,7 +46,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // 💡 మోడిఫికేషన్: localStorage కి బదులుగా MongoDB API నుండి ఆర్డర్లు తెచ్చుకునే చిన్న ఫంక్షన్
+  // 💡 MongoDB API నుండి ఆర్డర్లు తెచ్చుకునే ఫంక్షన్
   const fetchOrders = async () => {
     try {
       const res = await fetch(`/api/orders?t=${Date.now()}`, { cache: 'no-store' });
@@ -66,7 +68,7 @@ export default function AdminDashboard() {
       return;
     }
     fetchProducts();
-    fetchOrders(); // 👈 మోడిఫికేషన్: MongoDB ఆర్డర్ల ఫెచింగ్
+    fetchOrders();
   }, []);
 
   // కేటగిరీ మారినప్పుడు సైజులను ఆటోమేటిక్‌గా మార్చడం
@@ -89,31 +91,110 @@ export default function AdminDashboard() {
     setNewProduct({ ...newProduct, sizes: updatedSizes });
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+  // 🚀 ఒకేసారి మల్టిపుల్ ఇమేజ్ ఫైల్స్ అప్‌లోడ్ చేసే లాజిక్
+  const handleMultiImageUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const readers = files.map((file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then((results) => {
+      const updatedImages = [...newProduct.images];
+      let resIdx = 0;
+      for (let i = 0; i < 4 && resIdx < results.length; i++) {
+        if (!updatedImages[i]) {
+          updatedImages[i] = results[resIdx];
+          resIdx++;
+        }
+      }
+      if (resIdx < results.length) {
+        for (let i = 0; i < 4 && resIdx < results.length; i++) {
+          updatedImages[i] = results[resIdx];
+          resIdx++;
+        }
+      }
+
+      const mainImg = updatedImages.find((img) => img !== '') || '';
+      setNewProduct({
+        ...newProduct,
+        images: updatedImages,
+        image: mainImg,
+      });
+    });
+  };
+
+  // 🚀 పర్టిక్యులర్ స్లాట్ (1, 2, 3, 4) కి ఫైల్ అప్‌లోడ్ చేయడం
+  const handleSingleSlotUpload = (index, e) => {
+    const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setNewProduct({ ...newProduct, image: reader.result });
+        const updatedImages = [...newProduct.images];
+        updatedImages[index] = reader.result;
+        const mainImg = updatedImages.find((img) => img !== '') || '';
+        setNewProduct({
+          ...newProduct,
+          images: updatedImages,
+          image: mainImg,
+        });
       };
       reader.readAsDataURL(file);
     }
   };
 
+  // 🚀 పర్టిక్యులర్ స్లాట్ కి URL పేస్ట్ చేయడం
+  const handleUrlChange = (index, url) => {
+    const updatedImages = [...newProduct.images];
+    updatedImages[index] = url;
+    const mainImg = updatedImages.find((img) => img !== '') || '';
+    setNewProduct({
+      ...newProduct,
+      images: updatedImages,
+      image: mainImg,
+    });
+  };
+
+  // 🚀 స్లాట్ నుండి ఫోటో డిలీట్ చేయడం
+  const handleRemoveSingleImage = (index) => {
+    const updatedImages = [...newProduct.images];
+    updatedImages[index] = '';
+    const mainImg = updatedImages.find((img) => img !== '') || '';
+    setNewProduct({
+      ...newProduct,
+      images: updatedImages,
+      image: mainImg,
+    });
+  };
+
   const handleAddProduct = async (e) => {
     e.preventDefault();
-    if (!newProduct.name || !newProduct.price || !newProduct.image) {
-      alert('దయచేసి అన్ని వివరాలు మరియు ప్రొడక్ట్ ఫోటోను ఇవ్వండి!');
+    const activeImages = (newProduct.images || []).filter((img) => img && img.trim() !== '');
+    const mainImage = activeImages[0] || newProduct.image;
+
+    if (!newProduct.name || !newProduct.price || !mainImage) {
+      alert('దయచేసి అన్ని వివరాలు మరియు కనీసం ఒక ప్రొడక్ట్ ఫోటోను ఇవ్వండి!');
       return;
     }
 
     setLoading(true);
 
     try {
+      const payload = {
+        ...newProduct,
+        image: mainImage,
+        images: activeImages.length > 0 ? activeImages : [mainImage],
+      };
+
       const res = await fetch('/api/product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newProduct),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -125,6 +206,7 @@ export default function AdminDashboard() {
           name: '',
           price: '',
           image: '',
+          images: ['', '', '', ''],
           category: 'shirts',
           sizes: ['S', 'M', 'L'],
         });
@@ -139,7 +221,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // 🔴 సవరించబడిన డిలీట్ ఫంక్షన్ (MongoDB నుండి డిలీట్ చేస్తుంది)
+  // 🔴 MongoDB నుండి ప్రొడక్ట్ తొలగించే ఫంక్షన్
   const handleRemoveProduct = async (id) => {
     if (!confirm('ఈ ప్రొడక్ట్‌ని డేటాబేస్ నుండి శాశ్వతంగా తొలగించాలనుకుంటున్నారా?')) return;
 
@@ -170,7 +252,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // 💡 మోడిఫికేషన్: MongoDB నుండి ఆర్డర్ల డిలీట్
+  // 💡 MongoDB నుండి ఆర్డర్ల డిలీట్
   const handleClearAllOrders = async () => {
     if (confirm('అన్ని ఆర్డర్‌లను శాశ్వతంగా తొలగించాలనుకుంటున్నారా?')) {
       try {
@@ -402,44 +484,67 @@ export default function AdminDashboard() {
                 />
               </div>
 
+              {/* 🚀 మల్టిపుల్ యాంగిల్స్ ఫోటోలు అప్‌లోడ్ చేసే విభాగం */}
               <div>
                 <label className="block text-xs font-bold uppercase mb-1">
-                  Upload Product Photo
+                  Upload Product Photos (Up to 4 Angles)
                 </label>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={handleImageUpload}
+                  multiple
+                  onChange={handleMultiImageUpload}
                   className="w-full border p-2 text-xs rounded bg-gray-50 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-black file:text-white hover:file:bg-gray-800 cursor-pointer"
                 />
                 <p className="text-[10px] text-gray-500 mt-1">
-                  లేదా ఇమేజ్ URL లింక్ పేస్ట్ చేయండి:
+                  ఒకేసారి 1 నుండి 4 ఫోటోలను సెలెక్ట్ చేయవచ్చు లేదా కింద ఒక్కో యాంగిల్‌కి ఫోటో ఇవ్వవచ్చు:
                 </p>
-                <input
-                  type="text"
-                  value={
-                    newProduct.image.startsWith('data:') ? '' : newProduct.image
-                  }
-                  onChange={(e) =>
-                    setNewProduct({ ...newProduct, image: e.target.value })
-                  }
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full border p-2.5 text-xs rounded mt-1"
-                />
-              </div>
 
-              {newProduct.image && (
-                <div className="mt-2 flex items-center gap-3 border p-2 rounded bg-gray-50">
-                  <img
-                    src={newProduct.image}
-                    alt="Preview"
-                    className="w-12 h-16 object-cover rounded border"
-                  />
-                  <span className="text-[11px] text-green-700 font-bold">
-                    ఫోటో ఎంపిక చేయబడింది!
-                  </span>
+                {/* 📸 4 యాంగిల్ స్లాట్‌ల లేఅవుట్ */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                  {[0, 1, 2, 3].map((idx) => {
+                    const labels = ['1. Main / Front', '2. Back View', '3. Side View', '4. Extra View'];
+                    const imgUrl = newProduct.images[idx] || '';
+                    return (
+                      <div key={idx} className="border p-2 rounded bg-gray-50 text-center flex flex-col justify-between">
+                        <span className="text-[10px] font-bold uppercase text-gray-600 block mb-1">
+                          {labels[idx]}
+                        </span>
+                        {imgUrl ? (
+                          <div className="relative group w-full h-20 bg-white border rounded overflow-hidden mb-1 flex items-center justify-center">
+                            <img src={imgUrl} alt={`Angle ${idx + 1}`} className="max-h-full max-w-full object-contain" />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSingleImage(idx)}
+                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center font-bold"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="w-full h-20 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:border-black transition mb-1 bg-white">
+                            <span className="text-lg text-gray-400">+</span>
+                            <span className="text-[9px] text-gray-500 font-bold uppercase">Add Photo</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleSingleSlotUpload(idx, e)}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                        <input
+                          type="text"
+                          value={imgUrl.startsWith('data:') ? '' : imgUrl}
+                          onChange={(e) => handleUrlChange(idx, e.target.value)}
+                          placeholder="URL link..."
+                          className="w-full border text-[10px] p-1 rounded"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
 
               {/* Dynamic Sizes according to Category */}
               <div>
@@ -510,7 +615,7 @@ export default function AdminDashboard() {
                   >
                     <div className="flex items-center gap-4">
                       <img
-                        src={item.image}
+                        src={(Array.isArray(item.images) && item.images[0]) || item.image}
                         alt={item.name}
                         className="w-12 h-14 object-cover rounded border"
                       />

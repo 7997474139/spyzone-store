@@ -12,13 +12,14 @@ async function connectDB() {
   return await mongoose.connect(MONGODB_URI);
 }
 
-// Product Schema Definition
+// Product Schema Definition (images array ని యాడ్ చేశాం)
 const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     price: { type: String, required: true },
     category: { type: String },
     image: { type: String },
+    images: { type: Array, default: [] }, // 👈 4 యాంగిల్స్ ఫోటోల కోసం యాడ్ చేసిన ఫీల్డ్
     description: { type: String },
     sizes: { type: Array, default: [] },
   },
@@ -41,12 +42,24 @@ export async function GET() {
   }
 }
 
-// 2. POST: అడ్మిన్ ప్యానెల్ నుండి కొత్త ప్రొడక్ట్ యాడ్ చేయడం
+// 2. POST: అడ్మిన్ ప్యానెల్ నుండి కొత్త ప్రొడక్ట్ యాడ్ చేయడం (మల్టిపుల్ ఇమేజెస్ హ్యాండ్లింగ్‌తో)
 export async function POST(req) {
   try {
     await connectDB();
     const body = await req.json();
-    const newProduct = await Product.create(body);
+
+    // 💡 4 ఇమేజెస్ ఉంటే సేకరించడం, లేకపోతే మెయిన్ ఇమేజ్‌ని Array గా మార్చడం
+    const activeImages = Array.isArray(body.images) && body.images.length > 0
+      ? body.images.filter((img) => img && typeof img === 'string' && img.trim() !== '')
+      : (body.image ? [body.image] : []);
+
+    const productData = {
+      ...body,
+      image: activeImages[0] || body.image || '',
+      images: activeImages.length > 0 ? activeImages : (body.image ? [body.image] : []),
+    };
+
+    const newProduct = await Product.create(productData);
 
     return NextResponse.json({ success: true, data: newProduct }, { status: 201 });
   } catch (error) {

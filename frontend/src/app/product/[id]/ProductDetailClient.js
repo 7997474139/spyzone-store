@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
 import Link from 'next/link';
 
@@ -19,11 +19,22 @@ export default function ProductDetailClient({ product }) {
   const [selectedSize, setSelectedSize] = useState(availableSizes.length === 1 ? availableSizes[0] : '');
   const [copied, setCopied] = useState(false);
 
-  // 🚀 మల్టిపుల్ యాంగిల్ ఫోటోల కోసం ఇమేజ్ లిస్ట్ & ఆక్టివ్ ఫోటో స్టేట్ (కొత్తగా చేర్చిన అప్‌డేట్)
+  // 🚀 మల్టిపుల్ యాంగిల్స్ ఇమేజెస్ ఉంటే సేకరించడం
   const imageList = Array.isArray(product?.images) && product.images.length > 0
     ? product.images
     : (product?.image ? [product.image] : []);
-  const [activeImage, setActiveImage] = useState(imageList[0] || '');
+
+  // 🚀 ప్రస్తుతం కస్టమర్ సెలెక్ట్ చేసిన ఇమేజ్
+  const [activeImage, setActiveImage] = useState(imageList[0] || product?.image || '');
+
+  // 💡 ప్రొడక్ట్ లోడ్ కాగానే మొదటి ఇమేజ్‌ని ఆటోమేటిక్‌గా సెట్ చేయడం
+  useEffect(() => {
+    if (imageList.length > 0) {
+      setActiveImage(imageList[0]);
+    } else if (product?.image) {
+      setActiveImage(product.image);
+    }
+  }, [product]);
 
   if (!product) {
     return (
@@ -50,7 +61,6 @@ export default function ProductDetailClient({ product }) {
     setIsCartOpen(true);
   };
 
-  // 🚀 వాట్సాప్‌లో ఇమేజ్ ప్రివ్యూ మరియు లైవ్ Vercel డొమైన్‌తో షేర్ అయ్యే ఫుల్ లాజిక్
   const handleShare = async () => {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://spyzone-2o-store.vercel.app';
     const currentUrl = typeof window !== 'undefined' && !window.location.href.includes('localhost')
@@ -105,19 +115,19 @@ export default function ProductDetailClient({ product }) {
       <main className="max-w-[1200px] mx-auto px-4 md:px-8 py-8 md:py-14">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 items-start">
           
-          {/* 🖼️ ఇమేజ్ గ్యాలరీ (Main Image + Amazon/Flipkart Style Thumbnails) */}
+          {/* 🛍️ Amazon / Flipkart Style Gallery (Thumbnails + Main Image) */}
           <div className="flex flex-col-reverse md:flex-row gap-4 w-full">
             
-            {/* 📸 మల్టిపుల్ యాంగిల్స్ ఉన్నప్పుడు మాత్రమే కనిపిస్తాయి */}
+            {/* 📸 మల్టిపుల్ యాంగిల్స్ థంబ్‌నెయిల్స్ (1 కంటే ఎక్కువ ఉన్నప్పుడు మాత్రమే చూపిస్తుంది) */}
             {imageList.length > 1 && (
-              <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto max-h-[500px]">
+              <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto max-h-[500px] p-1">
                 {imageList.map((img, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => setActiveImage(img)}
-                    className={`w-16 h-16 md:w-20 md:h-20 border-2 rounded p-1 transition flex-shrink-0 bg-[#f8f8f8] ${
-                      (activeImage || imageList[0]) === img ? 'border-black opacity-100' : 'border-gray-200 opacity-60 hover:opacity-100'
+                    className={`w-16 h-16 md:w-20 md:h-20 border-2 rounded p-1 transition flex-shrink-0 bg-[#f8f8f8] cursor-pointer ${
+                      activeImage === img ? 'border-black ring-2 ring-black opacity-100 scale-105' : 'border-gray-200 opacity-60 hover:opacity-100'
                     }`}
                   >
                     <img src={img} alt={`Angle ${idx + 1}`} className="w-full h-full object-contain" />
@@ -126,16 +136,17 @@ export default function ProductDetailClient({ product }) {
               </div>
             )}
 
-            {/* 🖼️ మెయిన్ ఇమేజ్ డిస్‌ప్లే */}
+            {/* 🖼️ మెయిన్ పెద్ద ఇమేజ్ (థంబ్‌నెయిల్ క్లిక్ చేస్తే ఇది మారుతుంది) */}
             <div className="bg-[#f8f8f8] border border-gray-200 aspect-square w-full flex-1 flex items-center justify-center p-4 rounded">
-              {(activeImage || product?.image) ? (
-                <img src={activeImage || product?.image} alt={product.name} className="max-h-full max-w-full object-contain transition-all duration-300" />
+              {activeImage ? (
+                <img src={activeImage} alt={product.name} className="max-h-full max-w-full object-contain transition-all duration-300" />
               ) : (
                 <div className="text-xs text-gray-400 uppercase font-bold tracking-wider">No Image Available</div>
               )}
             </div>
           </div>
 
+          {/* 📝 ప్రొడక్ట్ వివరాలు & యాడ్ టు బ్యాగ్ */}
           <div className="flex flex-col justify-between">
             <div>
               <p className="text-[10px] uppercase font-bold tracking-[0.3em] text-gray-500 mb-1">{product.category || 'Collection'}</p>
@@ -162,10 +173,10 @@ export default function ProductDetailClient({ product }) {
             </div>
 
             <div className="space-y-3 pt-4 border-t border-gray-200">
-              <button type="button" onClick={handleAddToCart} className="w-full bg-black text-white py-3.5 text-xs font-bold uppercase tracking-[0.2em] hover:bg-gray-800 transition">
+              <button type="button" onClick={handleAddToCart} className="w-full bg-black text-white py-3.5 text-xs font-bold uppercase tracking-[0.2em] hover:bg-gray-800 transition cursor-pointer">
                 Add to Bag
               </button>
-              <button type="button" onClick={handleShare} className="w-full bg-emerald-600 text-white py-3 text-xs font-bold uppercase tracking-[0.18em] hover:bg-emerald-700 transition flex items-center justify-center gap-2">
+              <button type="button" onClick={handleShare} className="w-full bg-emerald-600 text-white py-3 text-xs font-bold uppercase tracking-[0.18em] hover:bg-emerald-700 transition flex items-center justify-center gap-2 cursor-pointer">
                 <span>🔗 Share Product Link</span>
               </button>
               {copied && <p className="text-center text-xs font-bold text-emerald-600 uppercase tracking-wider mt-1">✓ లింక్ కాపీ అయింది!</p>}

@@ -29,14 +29,17 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  // 💡 ఇమేజ్ చెకింగ్: ఇమేజ్ గనక Base64 కాకుండా ఆన్‌లైన్ https URL అయితేనే వాట్సాప్‌కి ఇస్తాం
-  let imageUrl = product.image;
-  
-  if (!imageUrl || imageUrl.startsWith('data:')) {
-    // ఫోటో Base64 లో ఉంటే లేదా లేకపోతే ఫాల్‌బ్యాక్ డొమైన్ లోగో
-    imageUrl = `${baseUrl}/logo.png`;
-  } else if (!imageUrl.startsWith('http')) {
-    imageUrl = `${baseUrl}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+  // 💡 ఇమేజ్ లాజిక్:
+  // ఇమేజ్ ఆన్‌లైన్ https URL అయితే నేరుగా దాన్ని వాడతాం.
+  // Base64 ఫోటో అయితే మన కొత్త /api/product-image URL ని వాడతాం.
+  let imageUrl = `${baseUrl}/logo.png`;
+
+  if (product.image) {
+    if (product.image.startsWith('http')) {
+      imageUrl = product.image;
+    } else if (product.image.startsWith('data:')) {
+      imageUrl = `${baseUrl}/api/product-image?id=${id}`;
+    }
   }
 
   return {

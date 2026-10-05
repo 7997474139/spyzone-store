@@ -1,10 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-// పాత పాత్ తీసేసి:
-// import { useCart } from '../../../context/CartContext';
-
-// 🚀 ఈ క్రింది విధంగా పెట్టండి:
 import { useCart } from '@/context/CartContext';
 import Link from 'next/link';
 
@@ -48,12 +44,21 @@ export default function ProductDetailClient({ product }) {
     setIsCartOpen(true);
   };
 
+  // 🚀 వాట్సాప్‌లో ఇమేజ్ ప్రివ్యూ మరియు లైవ్ Vercel డొమైన్‌తో షేర్ అయ్యే ఫుల్ లాజిక్
   const handleShare = async () => {
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-    const shareTitle = `SPY ZONE - ${product.name}`;
-    const shareText = `Check out this product on SPY ZONE:\n*${product.name}*\nPrice: ₹${product.price}\n\n`;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://spyzone-2o-store.vercel.app';
+    const currentUrl = typeof window !== 'undefined' && !window.location.href.includes('localhost')
+      ? window.location.href
+      : `${baseUrl}/product/${product._id || product.id}`;
 
-    const shareData = { title: shareTitle, text: shareText, url: currentUrl };
+    const shareTitle = `${product.name} - ₹${product.price} | SPY ZONE`;
+    const shareText = `🔥 Check out *${product.name}* on SPY ZONE!\n💰 Price: ₹${product.price}\n\n👇 Click link to view product:\n${currentUrl}`;
+
+    const shareData = {
+      title: shareTitle,
+      text: `🔥 Check out *${product.name}* on SPY ZONE! Price: ₹${product.price}`,
+      url: currentUrl,
+    };
 
     if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare(shareData)) {
       try {
@@ -66,11 +71,11 @@ export default function ProductDetailClient({ product }) {
 
     const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (isMobile) {
-      const fullMessage = encodeURIComponent(`${shareText}${currentUrl}`);
+      const fullMessage = encodeURIComponent(shareText);
       window.open(`https://api.whatsapp.com/send?text=${fullMessage}`, '_blank');
     } else {
       try {
-        await navigator.clipboard.writeText(currentUrl);
+        await navigator.clipboard.writeText(shareText);
         setCopied(true);
         setTimeout(() => setCopied(false), 3000);
       } catch (copyErr) {

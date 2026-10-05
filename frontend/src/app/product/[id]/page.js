@@ -31,14 +31,21 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const imageUrl = product.image || `${baseUrl}/logo.png`;
+  // 💡 ఇమేజ్ URL చెకింగ్ (Base64 ఉంటే వాట్సాప్ తీసుకోదు కాబట్టి ఫాల్‌బ్యాక్ ఇమేజ్ వాడతాం)
+  let imageUrl = product.image || `${baseUrl}/logo.png`;
+  if (imageUrl.startsWith('data:')) {
+    // ఫోటో అప్‌లోడ్ చేసినది స్థానికంగా Base64 లో ఉంటే ఫాల్‌బ్యాక్ డొమైన్ లోగో వాడతాం
+    imageUrl = `${baseUrl}/logo.png`;
+  } else if (!imageUrl.startsWith('http')) {
+    imageUrl = `${baseUrl}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+  }
 
   return {
     title: `${product.name} | SPY ZONE`,
     description: `Price: ₹${product.price} - Buy ${product.name} online on SPY ZONE Luxury Fashion.`,
     openGraph: {
-      title: `${product.name} | SPY ZONE`,
-      description: `Price: ₹${product.price}`,
+      title: `${product.name} - ₹${product.price}`,
+      description: `Check out ${product.name} on SPY ZONE Luxury Fashion! Price: ₹${product.price}`,
       url: `${baseUrl}/product/${id}`,
       siteName: 'SPY ZONE',
       images: [
@@ -53,7 +60,7 @@ export async function generateMetadata({ params }) {
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${product.name} | SPY ZONE`,
+      title: `${product.name} - ₹${product.price}`,
       description: `Price: ₹${product.price}`,
       images: [imageUrl],
     },

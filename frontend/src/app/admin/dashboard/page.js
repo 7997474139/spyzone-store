@@ -44,6 +44,21 @@ export default function AdminDashboard() {
     }
   };
 
+  // 💡 మోడిఫికేషన్: localStorage కి బదులుగా MongoDB API నుండి ఆర్డర్లు తెచ్చుకునే చిన్న ఫంక్షన్
+  const fetchOrders = async () => {
+    try {
+      const res = await fetch(`/api/orders?t=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.orders)) {
+        setOrders(data.orders);
+      } else if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+    }
+  };
+
   useEffect(() => {
     const isLoggedIn = localStorage.getItem('is_admin_logged_in');
     if (!isLoggedIn) {
@@ -51,8 +66,7 @@ export default function AdminDashboard() {
       return;
     }
     fetchProducts();
-    const savedOrders = JSON.parse(localStorage.getItem('spy_orders') || '[]');
-    setOrders(savedOrders);
+    fetchOrders(); // 👈 మోడిఫికేషన్: MongoDB ఆర్డర్ల ఫెచింగ్
   }, []);
 
   // కేటగిరీ మారినప్పుడు సైజులను ఆటోమేటిక్‌గా మార్చడం
@@ -153,14 +167,20 @@ export default function AdminDashboard() {
     if (confirm('ఈ ఆర్డర్ను డిలీట్ చేయాలనుకుంటున్నారా?')) {
       const updatedOrders = orders.filter((ord) => ord.orderId !== orderId);
       setOrders(updatedOrders);
-      localStorage.setItem('spy_orders', JSON.stringify(updatedOrders));
     }
   };
 
-  const handleClearAllOrders = () => {
+  // 💡 మోడిఫికేషన్: MongoDB నుండి ఆర్డర్ల డిలీట్
+  const handleClearAllOrders = async () => {
     if (confirm('అన్ని ఆర్డర్‌లను శాశ్వతంగా తొలగించాలనుకుంటున్నారా?')) {
-      setOrders([]);
-      localStorage.removeItem('spy_orders');
+      try {
+        const res = await fetch('/api/orders', { method: 'DELETE' });
+        if (res.ok) {
+          setOrders([]);
+        }
+      } catch (err) {
+        console.error('Delete orders error:', err);
+      }
     }
   };
 
@@ -264,50 +284,61 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {orders.map((ord, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="p-3 align-top font-extrabold">
-                          {ord.orderId}
-                          <p className="text-[10px] text-gray-500 font-normal">
-                            {ord.date}
-                          </p>
-                        </td>
-                        <td className="p-3 align-top font-bold uppercase">
-                          {ord.shippingAddress?.fullName}
-                          <p className="text-blue-600 font-semibold">
-                            📞 {ord.shippingAddress?.phone}
-                          </p>
-                        </td>
-                        <td className="p-3 align-top">
-                          {ord.shippingAddress?.address},{' '}
-                          {ord.shippingAddress?.city} -{' '}
-                          <span className="text-red-600">
-                            {ord.shippingAddress?.pincode}
-                          </span>
-                        </td>
-                        <td className="p-3 align-top">
-                          {ord.items?.map((it, i) => (
-                            <div key={i} className="text-[11px]">
-                              - {it.name} ({it.selectedSize})
-                            </div>
-                          ))}
-                        </td>
-                        <td className="p-3 align-top font-black text-green-700">
-                          ₹{ord.totalAmount}{' '}
-                          <span className="block text-[10px] text-purple-700 uppercase">
-                            ({ord.paymentMethod})
-                          </span>
-                        </td>
-                        <td className="p-3 align-top text-center">
-                          <button
-                            onClick={() => handleDeleteOrder(ord.orderId)}
-                            className="bg-red-100 text-red-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded hover:bg-red-600 hover:text-white transition"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {orders.map((ord, idx) => {
+                      const addr = ord.shippingAddress || ord;
+                      const name = addr.fullName || addr.name || ord.name || 'N/A';
+                      const phone = addr.phone || ord.phone || 'N/A';
+                      const address = addr.address || ord.address || 'N/A';
+                      const city = addr.city || ord.city || '';
+                      const pincode = addr.pincode || ord.pincode || '';
+                      const orderDate = ord.createdAt
+                        ? new Date(ord.createdAt).toLocaleString('en-IN')
+                        : ord.date || 'N/A';
+
+                      return (
+                        <tr key={ord._id || idx} className="hover:bg-gray-50">
+                          <td className="p-3 align-top font-extrabold">
+                            {ord.orderId || `SPY-${idx + 1}`}
+                            <p className="text-[10px] text-gray-500 font-normal">
+                              {orderDate}
+                            </p>
+                          </td>
+                          <td className="p-3 align-top font-bold uppercase">
+                            {name}
+                            <p className="text-blue-600 font-semibold">
+                              📞 {phone}
+                            </p>
+                          </td>
+                          <td className="p-3 align-top">
+                            {address}, {city} -{' '}
+                            <span className="text-red-600">
+                              {pincode}
+                            </span>
+                          </td>
+                          <td className="p-3 align-top">
+                            {ord.items?.map((it, i) => (
+                              <div key={i} className="text-[11px]">
+                                - {it.name} ({it.selectedSize || 'N/A'})
+                              </div>
+                            ))}
+                          </td>
+                          <td className="p-3 align-top font-black text-green-700">
+                            ₹{ord.totalAmount}{' '}
+                            <span className="block text-[10px] text-purple-700 uppercase">
+                              ({ord.paymentMethod || 'PhonePe / UPI'})
+                            </span>
+                          </td>
+                          <td className="p-3 align-top text-center">
+                            <button
+                              onClick={() => handleDeleteOrder(ord.orderId)}
+                              className="bg-red-100 text-red-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded hover:bg-red-600 hover:text-white transition"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

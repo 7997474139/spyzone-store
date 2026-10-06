@@ -24,3 +24,45 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 🕷️ SPY ZONE Custom Spider Animations */
+
+/* 1. స్పైడర్ ఉయ్యాల ఊగినట్లు మూవ్ అయ్యే యానిమేషన్ */
+@keyframes spiderSwing {
+  0%, 100% {
+    transform: rotate(0deg) translateY(0px);
+  }
+  25% {
+    transform: rotate(12deg) translateY(2px);
+  }
+  75% {
+    transform: rotate(-12deg) translateY(1px);
+  }
+}
+
+/* 2. స్పైడర్ రెడ్ మోషన్ ఐకాన్ గ్లో అయ్యే యానిమేషన్ */
+@keyframes spiderGlowPulse {
+  0%, 100% {
+    filter: drop-shadow(0px 0px 2px rgba(255, 255, 255, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0px 0px 10px rgba(239, 68, 68, 0.9));
+  }
+}
+
+/* యానిమేషన్ క్లాస్‌లు */
+.spider-anim {
+  display: inline-block;
+  animation: spiderSwing 3.5s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.spider-glow {
+  transition: all 0.3s ease;
+  animation: spiderGlowPulse 2.5s infinite;
+}
+
+.spider-glow:hover {
+  filter: drop-shadow(0px 0px 12px rgba(239, 68, 68, 1)) !important;
+  transform: scale(1.25) rotate(10deg);
+}

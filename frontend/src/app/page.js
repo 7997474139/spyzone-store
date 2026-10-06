@@ -38,6 +38,52 @@ const getCategorySizes = (category, productSizes) => {
   return ['S', 'M', 'L', 'XL', 'XXL'];
 };
 
+// ⌨️ Slow & Smooth Infinite Typewriter Effect with Red Dot Component
+function InfiniteTypewriterText({ text, speed = 120, pauseDelay = 5000 }) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(true);
+
+  useEffect(() => {
+    let timer;
+    let index = 0;
+
+    const startTyping = () => {
+      setDisplayedText('');
+      setIsTyping(true);
+      index = 0;
+
+      const typeInterval = setInterval(() => {
+        if (index < text.length) {
+          setDisplayedText(text.substring(0, index + 1));
+          index++;
+        } else {
+          clearInterval(typeInterval);
+          setIsTyping(false);
+          // 5 సెకన్ల విరామం తర్వాత రీస్టార్ట్
+          timer = setTimeout(() => {
+            startTyping();
+          }, pauseDelay);
+        }
+      }, speed);
+    };
+
+    startTyping();
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [text, speed, pauseDelay]);
+
+  return (
+    <span className="inline-inline font-mono">
+      {displayedText}
+      <span className="animate-ping text-red-600 font-black ml-1 text-2xl inline-block leading-none">
+        •
+      </span>
+    </span>
+  );
+}
+
 export default function Home() {
   const {
     cart,
@@ -54,7 +100,7 @@ export default function Home() {
   const [bannerImages, setBannerImages] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch Products directly from MongoDB API (No localStorage dependency)
+  // Fetch Products directly from MongoDB API
   useEffect(() => {
     async function fetchProducts() {
       try {
@@ -65,7 +111,6 @@ export default function Home() {
         if (data.success && Array.isArray(data.data)) {
           setProducts(data.data);
 
-          // Extract banner images
           const imagesList = data.data.map((item) => item.image).filter(Boolean);
           const uniqueImages = [...new Set(imagesList)];
           if (uniqueImages.length > 0) {
@@ -82,13 +127,13 @@ export default function Home() {
     fetchProducts();
   }, []);
 
-  // 2. Banner Slideshow Timer
+  // 🔄 Banner Continuous Infinite Slideshow
   useEffect(() => {
-    if (bannerImages.length === 0) return;
+    if (bannerImages.length <= 1) return;
     
     const timer = setInterval(() => {
       setCurrentBanner((prev) => (prev + 1) % bannerImages.length);
-    }, 3500);
+    }, 7000);
 
     return () => clearInterval(timer);
   }, [bannerImages]);
@@ -104,7 +149,6 @@ export default function Home() {
     const productId = item._id || item.id;
     const availableSizes = getCategorySizes(item.category, item.sizes);
     
-    // ఒకవేళ FREE SIZE లాంటి ఒకే సైజ్ ఉంటే ఆటోమేటిక్‌గా ఎంచుకుంటుంది
     let selectedSize = selectedSizes[productId];
     if (!selectedSize && availableSizes.length === 1) {
       selectedSize = availableSizes[0];
@@ -146,6 +190,30 @@ export default function Home() {
             activeCategory.toLowerCase()
         );
 
+  // 🏷️ Clean & Premium Feature Badges
+  const features = [
+    {
+      icon: '✨',
+      title: '100% Pure Premium Cotton',
+      subtitle: 'Ultra breathable & durable'
+    },
+    {
+      icon: '📐',
+      title: 'Master Tailored Fit',
+      subtitle: 'Designed for perfection'
+    },
+    {
+      icon: '⚡',
+      title: 'Express Delivery',
+      subtitle: '3-5 Days PAN India'
+    },
+    {
+      icon: '🛡️',
+      title: 'Direct UPI & QR Pay',
+      subtitle: 'Fast & verified checkout'
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-white text-black font-sans selection:bg-black selection:text-white">
 
@@ -157,14 +225,14 @@ export default function Home() {
             <div className="flex whitespace-nowrap animate-marquee items-center">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="flex items-center mx-4 md:mx-6 gap-3 shrink-0">
-                  <Link href="/" className="flex items-center gap-2">
-                    <span className="text-base md:text-xl font-black uppercase tracking-[0.16em]">
+                  <Link href="/" className="flex items-center gap-2 group">
+                    <span className="text-base md:text-xl font-black uppercase tracking-[0.16em] group-hover:text-red-500 transition-colors">
                       SPY ZONE
                     </span>
                     <img 
                       src="/logo.png" 
                       alt="Spider Logo" 
-                      className="w-4 h-4 md:w-6 md:h-6 object-contain filter invert" 
+                      className="w-4 h-4 md:w-6 md:h-6 object-contain filter invert spider-anim spider-glow" 
                     />
                   </Link>
                 </div>
@@ -191,102 +259,117 @@ export default function Home() {
         </div>
       </header>
 
-      {/* HERO SECTION */}
-      <section className="relative w-full h-[320px] sm:h-[420px] md:h-[480px] bg-black overflow-hidden">
-        {bannerImages.length > 0 ? (
-          bannerImages.map((img, idx) => (
-            <div
-              key={idx}
-              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                idx === currentBanner
-                  ? 'opacity-100 z-10'
-                  : 'opacity-0 z-0'
-              }`}
-            >
-              <div className="absolute inset-0 flex items-center justify-end pr-4 sm:pr-12 md:pr-20 bg-[#080808]">
-                <img
-                  src={img}
-                  alt={`SPY ZONE Collection ${idx + 1}`}
-                  className="h-[65%] sm:h-[75%] md:h-[80%] max-w-[50%] sm:max-w-[40%] object-contain drop-shadow-xl opacity-90 transition-transform duration-700 hover:scale-105"
-                />
-              </div>
-
-              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent w-full md:w-[70%]" />
-
-              <div className="absolute inset-0 flex items-center z-20">
-                <div className="max-w-[1400px] mx-auto px-5 md:px-12 lg:px-16 w-full">
-                  <div className="max-w-xl text-white">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[9px] md:text-xs uppercase tracking-[0.42em] font-semibold text-gray-400">
-                        SPY ZONE EXCLUSIVE
-                      </span>
-                    </div>
-
-                    <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-[44px] leading-[1.1] font-black uppercase tracking-[0.03em] mb-2 md:mb-3">
-                      REDEFINE YOUR STYLE. <br />
-                      <span className="text-gray-300 text-base sm:text-2xl md:text-3xl">UNLEASH THE CONFIDENCE.</span>
-                    </h1>
-
-                    <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] text-gray-400 mb-5">
-                      Crafted for the bold. Built for your everyday statement.
-                    </p>
-
-                    <a
-                      href="#arrivals"
-                      className="inline-flex items-center justify-center bg-white text-black px-5 py-2.5 text-[10px] md:text-[11px] uppercase tracking-[0.2em] font-bold hover:bg-gray-200 transition"
-                    >
-                      Shop Now
-                    </a>
-                  </div>
-                </div>
-              </div>
+      {/* CLASSY & SPACIOUS HERO SECTION */}
+      <section className="relative w-full bg-[#0a0a0a] border-b border-zinc-800 overflow-hidden">
+        <div className="max-w-[1400px] mx-auto min-h-[480px] md:min-h-[540px] px-6 md:px-12 py-10 md:py-16 flex flex-col md:flex-row items-center justify-between gap-8">
+          
+          {/* LEFT: Slow Clean Typing Typography */}
+          <div className="w-full md:w-1/2 z-10 text-white space-y-4">
+            <div>
+              <span className="inline-block text-xs font-bold uppercase tracking-[0.35em] text-red-500 bg-red-500/10 px-3 py-1 rounded border border-red-500/20">
+                <InfiniteTypewriterText text="SPY ZONE EXCLUSIVE" speed={120} pauseDelay={5000} />
+              </span>
             </div>
-          ))
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-            <div className="text-center px-6">
-              <h1 className="text-2xl md:text-5xl font-black uppercase tracking-wider mb-2">
-                SPY ZONE
+
+            <div className="min-h-[120px] md:min-h-[150px]">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tight leading-snug">
+                <InfiniteTypewriterText text="REDEFINE YOUR STYLE." speed={120} pauseDelay={5000} />
               </h1>
-              <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] text-gray-400 mb-6">
-                Redefine your style. Unleash the confidence.
-              </p>
+              <h2 className="text-gray-400 text-2xl sm:text-3xl lg:text-4xl font-bold uppercase mt-1">
+                <InfiniteTypewriterText text="UNLEASH THE CONFIDENCE." speed={120} pauseDelay={5000} />
+              </h2>
+            </div>
+
+            <p className="text-xs sm:text-sm text-gray-400 font-medium uppercase tracking-widest max-w-md min-h-[40px]">
+              <InfiniteTypewriterText text="CRAFTED FOR THE BOLD. BUILT FOR YOUR EVERYDAY STATEMENT." speed={90} pauseDelay={5000} />
+            </p>
+
+            <div className="pt-2">
               <a
                 href="#arrivals"
-                className="inline-block bg-white text-black px-6 py-2.5 text-xs uppercase tracking-widest font-bold"
+                className="inline-flex items-center justify-center bg-white text-black px-8 py-3.5 text-xs font-black uppercase tracking-[0.2em] hover:bg-zinc-200 transition shadow-xl"
               >
-                Shop Now
+                Shop Now →
               </a>
             </div>
           </div>
-        )}
+
+          {/* RIGHT: Display Image without any overlapping elements */}
+          <div className="w-full md:w-1/2 h-[320px] sm:h-[400px] relative flex items-center justify-center">
+            {bannerImages.length > 0 ? (
+              bannerImages.map((img, idx) => (
+                <div
+                  key={idx}
+                  className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ease-in-out ${
+                    idx === currentBanner ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                  }`}
+                >
+                  <img
+                    src={img}
+                    alt={`SPY ZONE Collection ${idx + 1}`}
+                    className="max-h-full max-w-full object-contain filter drop-shadow-[0_20px_30px_rgba(0,0,0,0.8)]"
+                  />
+                </div>
+              ))
+            ) : (
+              <div className="text-gray-500 text-xs uppercase tracking-widest font-bold">
+                Spy Zone Collection
+              </div>
+            )}
+          </div>
+
+        </div>
+      </section>
+
+      {/* 🌟 SEPARATE CLEAN BRAND FEATURE BAR */}
+      <section className="bg-zinc-950 border-b border-zinc-800 py-6 px-4">
+        <div className="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
+          {features.map((feat, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3.5 bg-zinc-900/60 p-3.5 rounded-lg border border-zinc-800/80 hover:border-zinc-700 transition"
+            >
+              <span className="text-2xl bg-zinc-800/80 w-10 h-10 rounded-md flex items-center justify-center shrink-0">
+                {feat.icon}
+              </span>
+              <div className="min-w-0">
+                <h5 className="text-xs font-bold text-white uppercase tracking-wider truncate">
+                  {feat.title}
+                </h5>
+                <p className="text-[10px] text-gray-400 font-medium truncate mt-0.5">
+                  {feat.subtitle}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* NEW ARRIVALS SECTION */}
       <section
         id="arrivals"
-        className="max-w-[1400px] mx-auto px-4 md:px-10 py-8 md:py-14"
+        className="max-w-[1400px] mx-auto px-4 md:px-10 py-10 md:py-16"
       >
-        <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-2 mb-6">
           <div>
-            <p className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-0.5">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-1 font-bold">
               Latest drops
             </p>
-            <h2 className="text-xl md:text-3xl font-black uppercase tracking-[0.08em]">
+            <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider">
               New Arrivals
             </h2>
           </div>
         </div>
 
         {/* Categories Filter Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-none">
           {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`shrink-0 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] border transition ${
+              className={`shrink-0 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] border transition ${
                 activeCategory === cat
-                  ? 'bg-black text-white border-black'
+                  ? 'bg-black text-white border-black shadow-md'
                   : 'bg-white text-gray-600 border-gray-300 hover:border-black hover:text-black'
               }`}
             >
@@ -301,14 +384,13 @@ export default function Home() {
             ప్రొడక్ట్స్ లోడ్ అవుతున్నాయి...
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-14 text-gray-500 text-xs uppercase font-semibold tracking-widest border border-dashed border-gray-300 rounded-lg">
+          <div className="text-center py-16 text-gray-500 text-xs uppercase font-semibold tracking-widest border border-dashed border-gray-300 rounded-lg">
             ఈ కేటగిరీలో ఎలాంటి ప్రొడక్ట్స్ అందుబాటులో లేవు.
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {filteredProducts.map((item) => {
               const productId = item._id || item.id;
-              // 💡 కేటగిరీ ఆధారంగా సైజులను పొందుతుంది
               const itemSizes = getCategorySizes(item.category, item.sizes);
 
               return (
@@ -319,7 +401,7 @@ export default function Home() {
                   <div>
                     <div className="relative">
                       <Link href={`/product/${productId}`} className="block">
-                        <div className="w-full aspect-square bg-[#f8f8f8] overflow-hidden flex items-center justify-center p-2">
+                        <div className="w-full aspect-square bg-[#f8f8f8] overflow-hidden flex items-center justify-center p-3">
                           {item.image && item.image.trim() !== '' ? (
                             <img
                               src={item.image}
@@ -334,30 +416,30 @@ export default function Home() {
                         </div>
                       </Link>
 
-                      <span className="absolute top-2 left-2 bg-black text-white px-1.5 py-0.5 text-[8px] uppercase tracking-[0.12em] font-bold">
+                      <span className="absolute top-2 left-2 bg-black text-white px-2 py-0.5 text-[8px] uppercase tracking-[0.12em] font-bold">
                         New
                       </span>
                     </div>
 
-                    <div className="p-2.5">
+                    <div className="p-3">
                       <Link href={`/product/${productId}`}>
-                        <h3 className="font-medium text-[11px] uppercase tracking-wide leading-tight line-clamp-1 hover:underline text-gray-900">
+                        <h3 className="font-semibold text-xs uppercase tracking-wide leading-tight line-clamp-1 hover:underline text-gray-900">
                           {item.name}
                         </h3>
                       </Link>
 
-                      <p className="text-xs font-bold mt-1 text-black">
+                      <p className="text-xs font-bold mt-1.5 text-black">
                         {typeof item.price === 'number' ? `₹${item.price}` : item.price}
                       </p>
 
-                      <div className="mt-2">
+                      <div className="mt-3">
                         <div className="flex gap-1 flex-wrap">
                           {itemSizes.map((size) => (
                             <button
                               key={size}
                               type="button"
                               onClick={() => handleSizeSelect(productId, size)}
-                              className={`min-w-5 h-5 px-1 text-[8px] font-bold border transition flex items-center justify-center ${
+                              className={`min-w-6 h-6 px-1 text-[9px] font-bold border transition flex items-center justify-center ${
                                 selectedSizes[productId] === size || (itemSizes.length === 1 && size === 'FREE SIZE')
                                   ? 'bg-black text-white border-black'
                                   : 'bg-white text-black border-gray-300 hover:border-black'
@@ -371,7 +453,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="p-2.5 pt-0">
+                  <div className="p-3 pt-0">
                     <button
                       type="button"
                       onClick={() => handleAddToCart(item)}
@@ -382,7 +464,7 @@ export default function Home() {
 
                     <Link
                       href={`/product/${productId}`}
-                      className="block text-center mt-1.5 text-[8px] uppercase tracking-[0.12em] font-semibold text-gray-500 hover:text-black transition"
+                      className="block text-center mt-2 text-[8px] uppercase tracking-[0.12em] font-bold text-gray-500 hover:text-black transition"
                     >
                       View Details →
                     </Link>
@@ -485,7 +567,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Tailwind Marquee Global Keyframe */}
+      {/* Tailwind Marquee Global Keyframe - 60s కి మార్చబడింది (సూపర్ స్లో & స్మూత్) */}
       <style jsx global>{`
         @keyframes marquee {
           0% { transform: translateX(0%); }
@@ -494,7 +576,7 @@ export default function Home() {
         .animate-marquee {
           display: flex;
           width: max-content;
-          animation: marquee 25s linear infinite;
+          animation: marquee 60s linear infinite;
         }
       `}</style>
 

@@ -1,5 +1,6 @@
 import { CartProvider } from '../context/CartContext';
 import CartDrawer from '../components/CartDrawer';
+import WhatsAppSupport from '../components/WhatsAppSupport'; // 👈 వాట్సాప్ సపోర్ట్ కాంపోనెంట్
 import './globals.css';
 
 // 🚀 Vercel డొమైన్ Base URL
@@ -27,6 +28,8 @@ export default function RootLayout({ children }) {
         <CartProvider>
           {children}
           <CartDrawer />
+          {/* 🚀 ఫ్లోటింగ్ వాట్సాప్ సపోర్ట్ బటన్ */}
+          <WhatsAppSupport />
         </CartProvider>
       </body>
     </html>

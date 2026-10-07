@@ -2,7 +2,7 @@
 
 export default function WhatsAppSupport() {
   // 💡 ఇక్కడ మీ WhatsApp Business నంబర్ ఇవ్వండి (Country code 91 తో సహా)
-  const phoneNumber = '917997474139'; // 👈 మీ వాట్సాప్ నెంబర్ మార్చండి
+  const phoneNumber = '918978314516'; // 👈 మీ వాట్సాప్ నెంబర్ మార్చండి
 
   const defaultMessage = encodeURIComponent(
     'Hi SPY ZONE Support, I need help regarding a product/order.'
